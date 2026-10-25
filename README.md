@@ -1,13 +1,13 @@
 # Apart Research AI Collusion Sprint 2026 — Track 2.2
 
-This workspace is narrowed to the Track 2.2 experiment and its direct research dependencies.
+This workspace is narrowed to Track 2.2 and its direct research dependencies.
 
-- [`research_track_2_2/`](research_track_2_2/) — benchmark, monitoring pipeline, Docker setup, and research notes.
-- [`llm-trust-breaking/`](llm-trust-breaking/) — public-goods game and candidate source for future real-agent trajectories.
-- [`trace-guard/`](trace-guard/) — action-trace monitoring source being evaluated for an adapted integration.
-- [`util/`](util/) — shared `poseidon_compute` package required by the starter projects' model configuration.
-- [`literature/`](literature/) — sprint papers and collusion-definition materials relevant to research design.
+- [`research_track_2_2/`](research_track_2_2/) — real-game parser, four evidence views, gated runner, tests, Docker setup, and research protocol.
+- [`llm-trust-breaking/`](llm-trust-breaking/) — original public-goods game and endogenous plan/announce/act runner connected by Track 2.2.
+- [`trace-guard/`](trace-guard/) — source for the action-trace consistency concept adapted in M4; original evaluator is not invoked.
+- [`util/`](util/) — shared model configuration package used by the starter.
+- [`literature/`](literature/) — sprint papers and collusion-definition materials.
 
-The Track 2.2 pipeline's runtime path uses the Python standard library and Docker Desktop. The scripted benchmark does not call an agent-generation model. OpenRouter monitoring is a separate paid step and requires a key in `research_track_2_2/.env`.
+The previous 24 scripted cases are retained as test-only data. Two earlier real-game run records were cleared from the active dataset on 2026-10-25 to prepare for a fresh pilot; their provider-reported usage was not saved. See [`research_track_2_2/README.md`](research_track_2_2/README.md) and its [`labeling_protocol.md`](research_track_2_2/labeling_protocol.md).
 
-For local reproduction, see [`research_track_2_2/README.md`](research_track_2_2/README.md). The shared compute configuration template is [`compute.env.example`](compute.env.example); never commit a populated `compute.env`.
+The shared configuration template is [`compute.env.example`](compute.env.example). Do not commit a populated `compute.env` or `.env`.

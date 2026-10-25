@@ -567,6 +567,7 @@ def _run_stage3(
     supports_structured: bool,
     self_reference: bool,
     agent_models: Optional[Dict[str, str]] = None,
+    stage3_visibility: str = "all_announcements",
 ) -> Dict[str, Dict[str, Any]]:
     """
     Fire Stage 3 for all agents in parallel (each sees all Stage 2 messages).
@@ -574,6 +575,8 @@ def _run_stage3(
     Returns:
         Dict[agent_name -> {choice, reasoning, _parse_ok}]
     """
+    if stage3_visibility not in {"all_announcements", "own_only"}:
+        raise ValueError("stage3_visibility must be all_announcements or own_only")
     requests = []
     for agent_name in agent_names:
         # Determine model and structured output support for this specific agent
@@ -584,7 +587,8 @@ def _run_stage3(
             game_type=game_type,
             agent_name=agent_name,
             agent_names=agent_names,
-            stage2_all=stage2_results,
+            stage2_all=(stage2_results if stage3_visibility == "all_announcements"
+                        else {agent_name: stage2_results.get(agent_name, {})}),
             game_params=game_params,
             stage1_result=stage1_results.get(agent_name) if self_reference else None,
             stage2_self=stage2_results.get(agent_name) if self_reference else None,
@@ -715,7 +719,7 @@ def _run_reflection(
 
 
 # ---------------------------------------------------------------------------
-# Judge executor  (LLM-as-judge, always uses openai/gpt-5-mini)
+# Judge executor (LLM-as-judge, defaults to openai/gpt-5-mini)
 # ---------------------------------------------------------------------------
 
 def _build_judge_request(
@@ -728,8 +732,9 @@ def _build_judge_request(
     stage3_result: Dict[str, Any],
     llm_client: Any,
     supports_structured: bool,
+    judge_model: str = "openai/gpt-5-mini",
 ) -> Dict[str, Any]:
-    """Build a single judge API request dict (always uses openai/gpt-5-mini)."""
+    """Build a single judge API request dict for the configured game judge."""
     sys_p, usr_p, schema = build_judge_prompt(
         agent_name=agent_name,
         agent_names=agent_names,
@@ -740,7 +745,7 @@ def _build_judge_request(
     )
     req = _build_request(
         custom_id=custom_id,
-        model="openai/gpt-5-mini",
+        model=judge_model,
         system_prompt=sys_p,
         user_prompt=usr_p,
         json_schema=schema,
@@ -748,9 +753,7 @@ def _build_judge_request(
         supports_structured=supports_structured,
         llm_client=llm_client,
     )
-    # The judge model (openai/gpt-5-mini) is a reasoning model: a 200-token budget is entirely consumed
-    # by reasoning tokens, leaving message content empty (content=None), which crashes the JSON parse and
-    # aborts the whole run. Give it enough headroom to emit the classification JSON after reasoning.
+    # Keep enough headroom for reasoning tokens and the classification JSON.
     req["max_tokens"] = 2000
     return req
 
@@ -764,11 +767,12 @@ def _run_judge(
     parallel_client: Any,
     llm_client: Any,
     supports_structured: bool,
+    judge_model: str = "openai/gpt-5-mini",
 ) -> Dict[str, Dict[str, Any]]:
     """
     Fire the judge prompt for all agents in parallel (sequential runner).
 
-    Uses the same parallel_client and model as the main agent stages.
+    Uses the parallel client with the separately configured game-judge model.
 
     Returns:
         Dict[agent_name -> {"primary_label": str, "confidence": int, "_parse_ok": bool}]
@@ -784,7 +788,8 @@ def _run_judge(
             stage2_all=stage2_results,
             stage3_result=stage3_results.get(agent_name, {}),
             llm_client=llm_client,
-            supports_structured=supports_structured,
+            supports_structured=_model_supports_structured_output(judge_model),
+            judge_model=judge_model,
         )
         requests.append((agent_name, req))
 
@@ -821,6 +826,8 @@ def run_trial(
     round_idx: int = 0,
     run_reflection: bool = False,
     agent_models: Optional[Dict[str, str]] = None,
+    stage3_visibility: str = "all_announcements",
+    judge_model: str = "openai/gpt-5-mini",
 ) -> Dict[str, Any]:
     """
     Run a single three-stage trial, optionally followed by a reflection step.
@@ -866,14 +873,16 @@ def run_trial(
         trial_id, game_type, agent_names, stage1, stage2, game_params,
         llm_client, parallel_client, supports_structured, self_reference,
         agent_models=agent_models,
+        stage3_visibility=stage3_visibility,
     )
 
-    # Judge: LLM-as-judge classification — uses same client/model as agents
+    # Judge: LLM-as-judge classification with the separately selected model
     judge = _run_judge(
         trial_id, agent_names, stage1, stage2, stage3,
         parallel_client=parallel_client,
         llm_client=llm_client,
-        supports_structured=supports_structured,
+        supports_structured=_model_supports_structured_output(judge_model),
+        judge_model=judge_model,
     )
 
     # Compute deception measures per agent
@@ -982,6 +991,8 @@ def run_all_trials(
     round_robin: bool = False,
     show_progress: bool = True,
     agent_models: Optional[Dict[str, str]] = None,
+    stage3_visibility: str = "all_announcements",
+    judge_model: str = "openai/gpt-5-mini",
 ) -> List[Dict[str, Any]]:
     """
     Run n_trials independent game instances for n_rounds, collecting all results.
@@ -1049,6 +1060,8 @@ def run_all_trials(
                 round_idx=round_idx,
                 run_reflection=do_reflect,
                 agent_models=agent_models,
+                stage3_visibility=stage3_visibility,
+                judge_model=judge_model,
             )
             round_results.append(result)
 
@@ -1178,6 +1191,7 @@ def run_all_trials_queued(
     round_robin: bool = False,
     show_progress: bool = True,
     agent_models: Optional[Dict[str, str]] = None,
+    judge_model: str = "openai/gpt-5-mini",
 ) -> List[Dict[str, Any]]:
     """
     Run all trials using the queue-based async client for maximum throughput.
@@ -1187,7 +1201,7 @@ def run_all_trials_queued(
       Stage 2:       n_trials × n_agents requests  (or n_agents sequential pos batches
                      of n_trials each, if round_robin=True)
       Stage 3:       n_trials × n_agents requests
-      Judge:         n_trials × n_agents requests  (always openai/gpt-5-mini)
+      Judge:         n_trials × n_agents requests  (configured judge model)
       Reflection:    n_trials × n_agents requests  (only when n_rounds > 1)
 
     Each trial maintains independent takeaways across rounds (Option A).
@@ -1206,6 +1220,7 @@ def run_all_trials_queued(
         agent_models:    optional dict mapping agent_name -> fully-qualified model string
                          (e.g., {"J": "openai/gpt-5-mini", "M": "anthropic/claude-sonnet-4.6"})
                          Falls back to llm_client.model if None or agent not in dict
+        judge_model:     fully-qualified model string used for game-generated judgments
 
     Returns:
         List of round dicts: [{"round_id": int, "trials": [trial_result, ...]}, ...]
@@ -1452,7 +1467,7 @@ def run_all_trials_queued(
                 }
         _assert_decisions_parsed(stage3_parsed, "Stage 3")
 
-        # ---- Judge batch (LLM-as-judge, same model/client as agents) ----
+        # ---- Judge batch (LLM-as-judge, separately configured model) ----
         print(f"  Judge: {n_trials * n_agents} classification requests...")
         judge_requests = []
         for trial_id in trial_ids:
@@ -1469,7 +1484,8 @@ def run_all_trials_queued(
                     },
                     stage3_result=stage3_parsed.get(f"{trial_id}_{agent_name}", {}),
                     llm_client=llm_client,
-                    supports_structured=supports_structured,
+                    supports_structured=_model_supports_structured_output(judge_model),
+                    judge_model=judge_model,
                 )
                 judge_requests.append(req)
 

@@ -4,3 +4,5 @@ __pycache__/
 *.py[cod]
 results/raw_responses.jsonl
 results/cache.json
+data/llm_agents/source_runs/
+data/llm_agents/trajectories.jsonl

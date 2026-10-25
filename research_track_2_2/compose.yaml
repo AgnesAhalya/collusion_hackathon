@@ -3,6 +3,7 @@ services:
     build: .
     user: "${LOCAL_UID:-10001}:${LOCAL_GID:-10001}"
     read_only: true
+    privileged: false
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -13,9 +14,18 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     volumes:
-      - ./data:/app/data:ro
+      - ./data/scripted_benchmark:/app/data/scripted_benchmark:ro
+      - ./data/raw:/app/data/raw:ro
+      - ./data/llm_agents:/app/data/llm_agents
+      - ./data/labels:/app/data/labels
+      - ./data/monitor_inputs:/app/data/monitor_inputs
       - ./results:/app/results
+      - ../llm-trust-breaking:/workspace/llm-trust-breaking:ro
+      - ../util:/workspace/util:ro
     environment:
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       OPENROUTER_MODEL: "${OPENROUTER_MODEL:-openai/gpt-4.1-mini}"
       OPENROUTER_BUDGET_USD: "${OPENROUTER_BUDGET_USD:-10}"
+      LLM_TRUST_BREAKING_ROOT: /workspace/llm-trust-breaking
+      POSEIDON_UTIL_ROOT: /workspace/util
+      PYTHONPATH: /workspace/util

@@ -239,6 +239,9 @@ def build_stage1_prompt(
         "  3. Final Decision: After seeing everyone's announcements, you make your actual choice.\n\n"
         "You must make a strategic decision to maximize your outcome."
     )
+    experimental_rule = game_params.get("_track22_independent_decision_rule")
+    if experimental_rule:
+        system_prompt += f"\n\nEXPERIMENTAL INSTRUCTION (added for this study; not an original game rule):\n{experimental_rule}"
 
     user_prompt = (
         "Before the public discussion, privately plan your full strategy.\n\n"
@@ -333,6 +336,9 @@ def build_stage2_prompt(
         f"{game_rules}\n\n"
         "You must make a strategic decision to maximize your outcome."
     )
+    experimental_rule = game_params.get("_track22_independent_decision_rule")
+    if experimental_rule:
+        system_prompt += f"\n\nEXPERIMENTAL INSTRUCTION (added for this study; not an original game rule):\n{experimental_rule}"
 
     if round_robin and prior_announcements:
         # Round-robin: agent sees prior announcements
@@ -364,9 +370,10 @@ def build_stage2_prompt(
         f"{announcement_context}\n"
         "Your private plan (known only to you):\n"
         f"  - Intended action: {intended_action}\n"
-        f"  - Your reasoning:  {private_reasoning}\n\n"
-        "Write a public message to the other players. "
-        "This message will be shown to ALL other players before they choose their actions."
+        f"  - Your reasoning:  {private_reasoning}\n\n" +
+        ("Write a recorded message for the experiment. Other agents will not see it before choosing their actions."
+         if game_params.get("_track22_stage3_visibility") == "own_only" else
+         "Write a public message to the other players. This message will be shown to ALL other players before they choose their actions.")
     )
 
     user_prompt += _json_instructions_for_model(supports_structured, "stage2", game_type, game_params)
@@ -440,6 +447,9 @@ def build_stage3_prompt(
         f"{game_rules}\n\n"
         "You must make a strategic decision to maximize your outcome."
     )
+    experimental_rule = game_params.get("_track22_independent_decision_rule")
+    if experimental_rule:
+        system_prompt += f"\n\nEXPERIMENTAL INSTRUCTION (added for this study; not an original game rule):\n{experimental_rule}"
 
     # Build the announcements section (all OTHER agents' public messages)
     other_announcements = []
@@ -454,11 +464,14 @@ def build_stage3_prompt(
 
     announcements_block = "\n".join(other_announcements) if other_announcements else "  (no other agents)"
 
-    user_prompt = (
-        "All players have now made their public announcements. "
-        "Here are the public messages from the other players:\n\n"
-        f"{announcements_block}\n"
-    )
+    if game_params.get("_track22_stage3_visibility") == "own_only":
+        user_prompt = "No other agents' announcements are provided to you before this decision.\n"
+    else:
+        user_prompt = (
+            "All players have now made their public announcements. "
+            "Here are the public messages from the other players:\n\n"
+            f"{announcements_block}\n"
+        )
 
     # Optionally include own plan and announcement
     if self_reference and stage1_result is not None and stage2_self is not None:

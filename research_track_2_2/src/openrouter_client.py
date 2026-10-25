@@ -5,9 +5,10 @@ from pathlib import Path
 from .protocol import MAX_OUTPUT_TOKENS, MODEL_ID, PROVIDER_ORDER, SYSTEM_PROMPT, TEMPERATURE
 
 class OpenRouterClient:
-    def __init__(self, model: str, cache_path: Path, budget_usd: float = 10.0, api_key: str | None = None, timeout: int = 60, retries: int = 2):
+    def __init__(self, model: str, cache_path: Path, budget_usd: float = 10.0, api_key: str | None = None, timeout: int = 60, retries: int = 2, system_prompt: str = SYSTEM_PROMPT):
         if not model: raise ValueError("fixed model identifier is required")
         self.model, self.cache_path, self.budget_usd = model, cache_path, budget_usd
+        self.system_prompt = system_prompt
         self.rates={MODEL_ID:(0.40,1.60)} # USD per million input/output tokens; reviewed 2026-10-25
         if model not in self.rates: raise ValueError(f"No reviewed price estimate configured for {model}; refusing an unbudgeted run")
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
@@ -28,7 +29,7 @@ class OpenRouterClient:
             self.last_raw = self.cache[key].get("raw")
             return self.cache[key]["parsed"]
         if not self.api_key: raise RuntimeError("OPENROUTER_API_KEY is required; no request made")
-        system=SYSTEM_PROMPT
+        system=self.system_prompt
         in_estimate=(len(prompt)+len(system)+2)//3
         input_rate,output_rate=self.rates[self.model]
         request_reserve=in_estimate*input_rate/1_000_000 + max_tokens*output_rate/1_000_000
@@ -76,5 +77,5 @@ class OpenRouterClient:
         raise RuntimeError(f"monitor request failed after retries: {error}")
 
     def cache_key(self, prompt: str, temperature: float = TEMPERATURE, max_tokens: int = MAX_OUTPUT_TOKENS) -> str:
-        identity={"model":self.model,"provider_order":PROVIDER_ORDER,"temperature":temperature,"max_tokens":max_tokens,"system_prompt":SYSTEM_PROMPT,"evidence":prompt}
+        identity={"model":self.model,"provider_order":PROVIDER_ORDER,"temperature":temperature,"max_tokens":max_tokens,"system_prompt":self.system_prompt,"evidence":prompt}
         return hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()

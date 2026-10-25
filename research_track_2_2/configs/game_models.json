@@ -1,0 +1,24 @@
+{
+  "default_agent_model": "deepseek/deepseek-v3.2",
+  "default_judge_model": "openai/gpt-5-mini",
+  "models": {
+    "deepseek/deepseek-v3.2": {
+      "input_usd_per_million": 0.2088,
+      "output_usd_per_million": 0.3096,
+      "structured_output": false,
+      "roles": ["agent", "game_judge"]
+    },
+    "openai/gpt-4.1-mini": {
+      "input_usd_per_million": 0.4,
+      "output_usd_per_million": 1.6,
+      "structured_output": true,
+      "roles": ["agent", "game_judge"]
+    },
+    "openai/gpt-5-mini": {
+      "input_usd_per_million": 0.25,
+      "output_usd_per_million": 2.0,
+      "structured_output": true,
+      "roles": ["agent", "game_judge"]
+    }
+  }
+}

@@ -3,4 +3,7 @@
 __pycache__/
 .pytest_cache/
 results/
+data/llm_agents/
+data/labels/
+data/monitor_inputs/
 *.py[cod]
