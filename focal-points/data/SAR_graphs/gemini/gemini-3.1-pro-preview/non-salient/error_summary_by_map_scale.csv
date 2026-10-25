@@ -1,5 +1,0 @@
-meters_per_cell,ground_width_m,incident_count,vanilla_v1_prediction_count,vanilla_v1_incident_count,vanilla_v1_avg_distance_m,vanilla_v1_stddev_distance_m,saliency_v1_prediction_count,saliency_v1_incident_count,saliency_v1_avg_distance_m,saliency_v1_stddev_distance_m,saliency_v2_prediction_count,saliency_v2_incident_count,saliency_v2_avg_distance_m,saliency_v2_stddev_distance_m,saliency_v3_prediction_count,saliency_v3_incident_count,saliency_v3_avg_distance_m,saliency_v3_stddev_distance_m,saliency_v4_prediction_count,saliency_v4_incident_count,saliency_v4_avg_distance_m,saliency_v4_stddev_distance_m
-2.666666667,8000.000,29,87,29,1587.708,674.907,87,29,1666.466,1037.486,87,29,1702.865,779.502,87,29,1689.822,904.886,87,29,1561.029,625.795
-4,12000.000,7,21,7,2989.474,827.603,21,7,2593.621,1006.303,21,7,2699.214,829.522,21,7,2838.232,958.976,21,7,3073.622,708.688
-5.333333333,16000.000,5,15,5,5892.515,1700.688,15,5,6280.552,2898.856,15,5,5906.337,1979.623,15,5,5876.974,1989.802,15,5,5719.027,1870.220
-6.666666667,20000.000,5,15,5,7395.416,1054.968,15,5,8459.212,2917.835,15,5,7976.606,1913.391,15,5,7658.408,1522.959,15,5,7655.895,1604.261

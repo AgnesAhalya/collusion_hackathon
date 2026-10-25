@@ -1,0 +1,21 @@
+services:
+  track22:
+    build: .
+    user: "${LOCAL_UID:-10001}:${LOCAL_GID:-10001}"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 1.0
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - ./data:/app/data:ro
+      - ./results:/app/results
+    environment:
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      OPENROUTER_MODEL: "${OPENROUTER_MODEL:-openai/gpt-4.1-mini}"
+      OPENROUTER_BUDGET_USD: "${OPENROUTER_BUDGET_USD:-10}"

@@ -1,1 +1,0 @@
-{"batch_file": "sar_map_saliency_eval_gemini-3.1-pro-preview_20260519T142402Z.jsonl", "provider": "gemini", "model": "gemini-3.1-pro-preview", "job_name": "batches/f2265gjflp5hxxlr6ac2xs14fynp9q4k75wp"}

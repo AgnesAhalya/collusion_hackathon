@@ -1,1 +1,0 @@
-# Cleanup Grid-World Environment

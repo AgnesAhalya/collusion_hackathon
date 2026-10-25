@@ -1,8 +1,0 @@
-.venv/
-__pycache__/
-*.pyc
-.env
-results/jsonl/
-results/judge/
-results/branches/
-*.egg-info/

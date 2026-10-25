@@ -1,0 +1,15 @@
+[project]
+name = "track-2-2-collusion-monitoring"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+track22 = "src.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

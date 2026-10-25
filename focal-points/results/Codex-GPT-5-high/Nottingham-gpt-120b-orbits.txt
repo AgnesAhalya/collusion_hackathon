@@ -1,5 +1,0 @@
-Focality	Pick	Guess	Coordinate
-Uniqueness	3	3	2
-Uniqueness complement	0	1	2
-Centrality	9	10	8
-Extreme	4	3	3

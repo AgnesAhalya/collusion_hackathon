@@ -1,5 +1,0 @@
-split,baseline_method,comparison_method,incident_count,better_incident_count,worse_incident_count,tie_incident_count,mean_improvement_m,median_improvement_m,bootstrap_ci_low_m,bootstrap_ci_high_m,permutation_p_one_sided,sign_test_p_one_sided,mean_improvement_pct_map_width,median_improvement_pct_map_width,bootstrap_ci_low_pct_map_width,bootstrap_ci_high_pct_map_width,normalized_permutation_p_one_sided,mean_percent_reduction_vs_baseline,median_percent_reduction_vs_baseline
-salient/v2,vanilla_v1,saliency_v1,56,28,28,0,-87.064250,6.450000,-352.671446,164.735536,0.740113,0.553073,-1.399587,0.047659,-4.184904,1.228758,0.838072,-10.529280,0.083912
-salient/v2,vanilla_v1,saliency_v2,56,27,28,1,-1.753714,-12.441000,-123.192893,116.352000,0.509625,0.606147,-0.143051,-0.155512,-1.310796,0.985642,0.593384,-1.145774,-0.489221
-salient/v2,vanilla_v1,saliency_v3,56,29,26,1,30.685250,27.614000,-103.862214,166.771982,0.333627,0.393853,0.079065,0.345175,-1.210373,1.366625,0.450965,1.428082,1.833590
-salient/v2,vanilla_v1,saliency_v4,56,25,31,0,15.521589,-32.263500,-100.771714,131.118071,0.397966,0.825159,0.124219,-0.275338,-1.049607,1.307550,0.421406,-3.066980,-0.907969

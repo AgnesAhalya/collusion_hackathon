@@ -1,2 +1,0 @@
-{"batch_file": "sar_map_saliency_eval_gemini-2.5-pro_20260518T231847Z.jsonl", "provider": "gemini", "model": "gemini-2.5-pro", "job_name": "batches/25ulowg3aqe6793wcwebm233qojnj0gw6f7i"}
-{"batch_file": "sar_map_saliency_eval_gemini-2.5-pro_20260519T123447Z.jsonl", "provider": "gemini", "model": "gemini-2.5-pro", "job_name": "batches/7q7sd0vmmcv341dkoloqitcq9roqu2aj1hsi"}

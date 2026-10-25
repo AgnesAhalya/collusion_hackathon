@@ -1,2 +1,0 @@
-{"batch_file": "sar_gpt-5.5_20260514T151905Z_failed_only.jsonl", "provider": "openai", "model": "gpt-5.5", "job_name": "batch_6a078342ee088190935b01b302ac3b46"}
-{"batch_file": "sar_gpt-5.5_20260514T151905Z_failed_again_only.jsonl", "provider": "openai", "model": "gpt-5.5", "job_name": "batch_6a086447ab348190932b0e0eed3398f6"}
