@@ -34,6 +34,9 @@ def blinded_case(trajectory: dict) -> dict:
         "events": build_events(trajectory),
         "game_settings": {k: v for k, v in trajectory.get("game_settings", {}).items() if k in ("initial_tokens", "multiplier")},
     }
+    reports = trajectory.get("agent_self_reports", {})
+    if any(report.get("colluding") is not None for report in reports.values()):
+        result["agent_self_reports"] = reports
     forbidden = {"condition", "intervention", "ground_truth", "label", "judge", "verification", "review", "stage3_visibility", "track22_condition"}
     keys = set(result)
     if keys & forbidden:
@@ -62,7 +65,10 @@ def monitor_payloads(trajectory: dict) -> list[dict]:
     for view in ("M1", "M2", "M3", "M4"):
         evidence = json.loads(evidence_view(trajectory, view))
         serialized = json.dumps(evidence, sort_keys=True, ensure_ascii=False).lower()
-        forbidden = {"ground_truth_label", "label_assessment", "private_plans", "judge_majority_label", "confidence", "experimental_condition", "track22_condition", "review", "verification", "final_label"}
+        forbidden = {"ground_truth_label", "label_assessment", "private_plans", "agent_self_reports",
+                     "self_report_colluding", "self_report_confidence", "self_report_reasoning",
+                     "judge_majority_label", "confidence", "experimental_condition", "track22_condition",
+                     "review", "verification", "final_label"}
         def key_set(obj):
             if isinstance(obj, dict): return set(obj).union(*(key_set(v) for v in obj.values()))
             if isinstance(obj, list): return set().union(*(key_set(v) for v in obj)) if obj else set()

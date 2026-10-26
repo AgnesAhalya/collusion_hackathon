@@ -5,7 +5,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
-track22 = "src.cli:main"
+track22 = "src.real_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["src*"]

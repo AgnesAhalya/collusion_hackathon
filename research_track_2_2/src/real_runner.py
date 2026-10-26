@@ -57,6 +57,48 @@ JUDGE_MODEL_PRICES = {
 }
 
 
+def summarize_raw_calls(raw_calls_dir: Path) -> dict[str, Any]:
+    """Summarize provider-reported usage from captured HTTP attempts; never estimate actuals."""
+    calls_path = raw_calls_dir / "calls.jsonl"
+    calls = [json.loads(line) for line in calls_path.read_text(encoding="utf-8").splitlines()
+             if line.strip()] if calls_path.exists() else []
+    responses = [row for row in calls if row.get("http_status") is not None]
+    usage_rows = [row.get("usage") for row in calls if isinstance(row.get("usage"), dict)]
+
+    def sum_field(name: str) -> int | None:
+        values = [usage[name] for usage in usage_rows if isinstance(usage.get(name), (int, float))]
+        return int(sum(values)) if values else None
+
+    costs = [usage["cost"] for usage in usage_rows if isinstance(usage.get("cost"), (int, float))]
+    successful = [row for row in responses if 200 <= row["http_status"] < 300]
+    usage_complete = bool(successful) and all(
+        isinstance(row.get("usage"), dict)
+        and isinstance(row["usage"].get("prompt_tokens"), (int, float))
+        and isinstance(row["usage"].get("completion_tokens"), (int, float))
+        and isinstance(row["usage"].get("cost"), (int, float))
+        for row in successful
+    )
+    summary = {
+        "http_attempts_recorded": len(calls),
+        "http_responses_received": len(responses),
+        "successful_http_responses": len(successful),
+        "failed_http_responses": sum(not (200 <= row["http_status"] < 300) for row in responses),
+        "provider_usage_records": len(usage_rows),
+        "provider_reported_prompt_tokens": sum_field("prompt_tokens"),
+        "provider_reported_completion_tokens": sum_field("completion_tokens"),
+        "provider_reported_total_tokens": sum_field("total_tokens"),
+        "provider_reported_cost_usd": round(sum(costs), 8) if costs else None,
+        "provider_usage_status": "complete" if usage_complete else ("partial" if usage_rows else "unavailable"),
+        "raw_calls_file": "calls.jsonl",
+    }
+    usage_path = raw_calls_dir / "usage.json"
+    fd = os.open(usage_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(summary, handle, indent=2, ensure_ascii=False)
+        handle.write("\n")
+    return summary
+
+
 def conservative_smoke_estimate(agents: int = 2, trials: int = 1,
                                 model: str = DEFAULT_AGENT_MODEL,
                                 judge_model: str = DEFAULT_JUDGE_MODEL) -> dict[str, Any]:
@@ -108,10 +150,18 @@ def _openrouter_key() -> str | None:
 
 def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_id: str,
                               condition: str | None, agent_model: str, judge_model: str,
-                              estimate: dict[str, Any], output_dir: Path = RESULTS_DIR) -> Path:
+                              estimate: dict[str, Any], output_dir: Path = RESULTS_DIR,
+                              folder: Path | None = None) -> Path:
     """Create a new timestamped folder with human- and machine-readable results."""
-    folder = output_dir / f"{run_id}_{condition or 'unconditioned'}"
-    folder.mkdir(parents=True, exist_ok=False)
+    folder = folder or output_dir / f"{run_id}_{condition or 'unconditioned'}"
+    if folder.exists():
+        if not folder.is_dir() or any(p.name != "raw_calls" for p in folder.iterdir()):
+            raise FileExistsError(f"result folder already contains data: {folder}")
+        (folder / "raw_calls").mkdir(mode=0o700, exist_ok=True)
+    else:
+        folder.mkdir(parents=True, exist_ok=False, mode=0o700)
+        (folder / "raw_calls").mkdir(mode=0o700)
+    raw_usage = summarize_raw_calls(folder / "raw_calls")
     shutil.copy2(raw_path, folder / "source_run.json")
     source_payload = json.loads(raw_path.read_text(encoding="utf-8"))
     source_trials = {
@@ -132,7 +182,9 @@ def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_i
         f"- Trajectories: {len(trajectories)}",
         f"- Estimated inference cost: ${estimate['estimated_cost_usd']:.4f} (estimate only)",
         f"- Expected logical requests: {estimate['game_requests']}; retry reserve: up to {estimate['max_http_attempts_including_retries']} HTTP attempts",
-        "- Actual token usage and billed cost: unavailable; the original LTB runner does not save per-request usage.",
+        f"- Actual HTTP attempts captured: {raw_usage['http_attempts_recorded']}",
+        f"- Provider-reported usage: {raw_usage['provider_usage_status']}; input tokens={raw_usage['provider_reported_prompt_tokens']}; output tokens={raw_usage['provider_reported_completion_tokens']}; cost USD={raw_usage['provider_reported_cost_usd']}",
+        "- Raw request/response attempts and usage are in `raw_calls/calls.jsonl` and `raw_calls/usage.json`; credentials are not recorded.",
         "- Research label judges and M1–M4 monitors: not run in this game-generation stage.",
         "",
         "## Game records",
@@ -144,9 +196,7 @@ def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_i
         "expected_logical_requests": estimate["game_requests"],
         "reserved_max_http_attempts": estimate["max_http_attempts_including_retries"],
         "estimated_cost_usd": estimate["estimated_cost_usd"],
-        "actual_http_attempts": None, "provider_token_usage": None,
-        "actual_billed_cost_usd": None,
-        "usage_note": "Actual API usage was not persisted by the original LTB runner.",
+        "actual_api_usage": raw_usage,
         "label_judges_run": False, "monitors_run": False,
         "source_file": str(raw_path),
     }
@@ -223,6 +273,15 @@ def run_real_game(*, agents: int = 2, trials: int = 1, model: str = DEFAULT_AGEN
     source_dir = LLM_DATA / "source_runs"
     source_dir.mkdir(parents=True, exist_ok=True)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    result_folder = RESULTS_DIR / f"{run_id}_{condition or 'unconditioned'}"
+    result_folder.mkdir(parents=True, exist_ok=False, mode=0o700)
+    raw_calls_dir = result_folder / "raw_calls"
+    raw_calls_dir.mkdir(mode=0o700)
+    calls_path = raw_calls_dir / "calls.jsonl"
+    fd = os.open(calls_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    os.close(fd)
+    environment["TRACK22_RAW_CALLS_DIR"] = str(raw_calls_dir)
+    environment["TRACK22_RUN_ID"] = run_id
     command = [sys.executable, str(RUNNER), "--game", "publicgoods", "--agents", str(agents),
                "--trials", str(trials), "--rounds", "1", "--model", model, "--judge-model", judge_model,
                "--temperature", str(temperature), "--output-dir", str(source_dir), "--run-suffix", run_id]
@@ -232,18 +291,25 @@ def run_real_game(*, agents: int = 2, trials: int = 1, model: str = DEFAULT_AGEN
         command.append("--round-robin")
     completed = subprocess.run(command, cwd=STARTER, env=environment, text=True, capture_output=True)
     if completed.returncode:
+        summarize_raw_calls(raw_calls_dir)
+        (result_folder / "run_status.json").write_text(json.dumps({
+            "status": "failed", "exit_code": completed.returncode,
+            "stderr_tail": completed.stderr[-2000:],
+        }, indent=2), encoding="utf-8")
         raise RuntimeError(f"llm-trust-breaking runner failed (exit {completed.returncode}):\n{completed.stderr[-4000:]}")
     safe_model = model.replace("/", "_").replace(":", "_")
     # The starter runner's save_results() names files with its run_suffix only;
     # the condition is recorded in JSON metadata, not in the filename.
     raw_path = source_dir / "publicgoods" / f"{agents}agents" / f"{safe_model}_endogenous_{run_id}.json"
     if not raw_path.is_file():
+        summarize_raw_calls(raw_calls_dir)
         raise RuntimeError("Runner succeeded but did not produce the expected source-run JSON")
     rows = parse_file(raw_path)
     write_jsonl(rows, LLM_DATA / "trajectories.jsonl")
     bundle = write_readable_run_bundle(raw_path=raw_path, trajectories=rows, run_id=run_id,
                                        condition=condition, agent_model=model,
-                                       judge_model=judge_model, estimate=estimate)
+                                       judge_model=judge_model, estimate=estimate,
+                                       folder=result_folder)
     return {"status": "completed", "source_run": str(raw_path),
             "results_folder": str(bundle), "trajectory_count": len(rows),
             "estimated_cost_usd": estimate["estimated_cost_usd"]}

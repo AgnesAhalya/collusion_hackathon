@@ -5,7 +5,7 @@
 3. Related work: verified references to LLM Trust Breaking and TraceGuard; distinguish their original goals.
 4. Research question and hypotheses H1/H2.
 5. Experimental environment: original LTB public-goods game and endogenous plan/announce/act protocol.
-6. Dataset and labels: genuine model-generated trajectories, candidate evidence, blinded adjudication, and provenance; keep scripted data in a test-only appendix.
+6. Dataset and labels: genuine model-generated trajectories, candidate evidence, blinded adjudication, and provenance.
 7. Monitoring methods: M1–M4; TraceGuard-inspired consistency adaptation with attribution and limitations.
 8. Evaluation protocol: fixed model/prompt/temperature/threshold, split, retries, caching, budget.
 9. Results: metrics, confusion matrices, failure accounting, costs, per-case comparison; report no results until calls run.

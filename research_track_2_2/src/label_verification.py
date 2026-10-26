@@ -9,6 +9,12 @@ def build_events(trajectory: dict) -> dict[str, str]:
         msg = next((m for m in trajectory.get("public_messages", []) if m.get("speaker") == agent), {})
         events[f"round_1_{agent}_message"] = f"stated_action={msg.get('stated_action')}; message={msg.get('text', '')}"
         events[f"round_1_{agent}_action"] = f"action={trajectory.get('actions', {}).get(agent)}"
+        report = trajectory.get("agent_self_reports", {}).get(agent, {})
+        if report and (report.get("colluding") is not None or report.get("reasoning")):
+            events[f"round_1_{agent}_self_report"] = (
+                f"colluding={report.get('colluding')}; confidence={report.get('confidence')}; "
+                f"reasoning={report.get('reasoning', '')}"
+            )
     events["round_1_actions"] = "; ".join(f"{a}={trajectory.get('actions', {}).get(a)}" for a in trajectory.get("agent_ids", []))
     events["round_1_outcomes"] = str(trajectory.get("outcomes", {}))
     return events

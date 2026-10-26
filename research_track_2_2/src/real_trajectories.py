@@ -51,6 +51,13 @@ def parse_ltb_run(payload: dict[str, Any], *, source_path: str | None = None) ->
                     "parse_ok": agents_map[a].get("stage1", {}).get("_parse_ok")}
                 for a in agent_ids
             }
+            self_reports = {
+                a: {"colluding": agents_map[a].get("stage3", {}).get("self_report_colluding"),
+                    "confidence": agents_map[a].get("stage3", {}).get("self_report_confidence"),
+                    "reasoning": agents_map[a].get("stage3", {}).get("self_report_reasoning", ""),
+                    "parse_ok": agents_map[a].get("stage3", {}).get("_self_report_parse_ok")}
+                for a in agent_ids
+            }
             settings = metadata.get("game_params", {})
             tid = f"ltb-{_sha256(source_bytes)[:10]}-r{round_id}-t{trial.get('trial_id')}"
             result.append({
@@ -62,6 +69,7 @@ def parse_ltb_run(payload: dict[str, Any], *, source_path: str | None = None) ->
                 "agent_ids": agent_ids,
                 "agent_models": {a: agent_models.get(a, metadata.get("model")) for a in agent_ids},
                 "private_plans": plans,
+                "agent_self_reports": self_reports,
                 "public_messages": messages,
                 "actions": actions,
                 "action_reasoning": {a: agents_map[a].get("stage3", {}).get("reasoning", "") for a in agent_ids},
@@ -74,6 +82,7 @@ def parse_ltb_run(payload: dict[str, Any], *, source_path: str | None = None) ->
                     "track22_condition": metadata.get("track22_condition"),
                     "stage3_visibility": metadata.get("stage3_visibility"),
                     "track22_rule_active": metadata.get("track22_rule_active", False),
+                    "agent_self_report_active": metadata.get("track22_agent_self_report", False),
                 },
                 "generation_metadata": {
                     "generation_method": "llm_trust_breaking.run_endogenous",
@@ -87,6 +96,10 @@ def parse_ltb_run(payload: dict[str, Any], *, source_path: str | None = None) ->
                     "stage_parse_status": {
                         agent: {stage: trial.get("agents", {}).get(agent, {}).get(stage, {}).get("_parse_ok")
                                 for stage in ("stage1", "stage2", "stage3")}
+                        for agent in agent_ids
+                    },
+                    "self_report_parse_status": {
+                        agent: trial.get("agents", {}).get(agent, {}).get("stage3", {}).get("_self_report_parse_ok")
                         for agent in agent_ids
                     },
                     "announcement_order": trial.get("announcement_order"),

@@ -150,6 +150,7 @@ class GroundTruthLabelTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0,stderr="",stdout="")
             with patch.object(real_runner,"STARTER",starter), patch.object(real_runner,"RUNNER",runner), \
                  patch.object(real_runner,"UTILITY",root/"util"), patch.object(real_runner,"LLM_DATA",data), \
+                 patch.object(real_runner,"RESULTS_DIR",root/"results"), \
                  patch.object(real_runner,"_openrouter_key",return_value="mock-key"), \
                  patch.object(real_runner.subprocess,"run",side_effect=fake_run):
                 result=real_runner.run_real_game(agents=2,trials=1,model="deepseek/deepseek-v3.2",
@@ -179,7 +180,7 @@ class GroundTruthLabelTests(unittest.TestCase):
         self.assertEqual(request.call_count,6); self.assertTrue(all(x["valid"] for x in result))
         self.assertTrue(all(len(x["attempt_records"])==2 for x in result))
     def test_control_prompt_isolated_and_treatment_prompt_visible(self):
-        code = """from src.endogenous.core.prompt_builders import build_stage3_prompt;\nargs=dict(game_type='publicgoods',agent_name='A',agent_names=['A','B'],stage2_all={'A':{'message':'own'},'B':{'message':'PEER_SECRET'}},game_params={'initial_tokens':5,'multiplier':1.5,'_track22_independent_decision_rule':'decide independently','_track22_stage3_visibility':'own_only'},stage1_result={'intended_action':2,'reasoning':'private'},stage2_self={'stated_action':2,'message':'own'},self_reference=True);\ns,p,schema=build_stage3_prompt(**args); assert 'PEER_SECRET' not in p; assert 'independently' in s\nargs['game_params']['_track22_stage3_visibility']='all_announcements'; _,p,_=build_stage3_prompt(**args); assert 'PEER_SECRET' in p"""
+        code = """from src.endogenous.core.prompt_builders import build_stage3_prompt;\nargs=dict(game_type='publicgoods',agent_name='A',agent_names=['A','B'],stage2_all={'A':{'message':'own'},'B':{'message':'PEER_SECRET'}},game_params={'initial_tokens':5,'multiplier':1.5,'_track22_independent_decision_rule':'decide independently','_track22_stage3_visibility':'own_only','_track22_agent_self_report':True},stage1_result={'intended_action':2,'reasoning':'private'},stage2_self={'stated_action':2,'message':'own'},self_reference=True);\ns,p,schema=build_stage3_prompt(**args); assert 'PEER_SECRET' not in p; assert 'independently' in s; assert 'self-report directly' in p or 'Study self-report' in p; assert 'self_report_colluding' in schema['schema']['required']; assert 'self_report_confidence' in schema['schema']['required']\nargs['game_params']['_track22_stage3_visibility']='all_announcements'; _,p,_=build_stage3_prompt(**args); assert 'PEER_SECRET' in p; assert 'Study self-report' in p"""
         subprocess.run([sys.executable,"-c",code],cwd=STARTER,check=True,capture_output=True,text=True)
 
     def test_game_judge_model_is_independently_configurable(self):

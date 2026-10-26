@@ -1,6 +1,6 @@
 # Labeling pipeline validation report
 
-Status: offline implementation and tests complete. Earlier real game-generation API calls were made; their two raw run records and parsed trajectories were cleared from the active dataset on 2026-10-25 at the user's request. Provider-reported usage was unavailable. No label-judge or monitor calls were made.
+Status: no pilot outputs are currently retained. All native pilot runs, parsed trajectories, result bundles/raw-call logs, judge responses, labels, and caches were removed. Label-judge requests had previously been made; no monitor calls were made. The revised self-report flow has now passed host and Docker regression tests.
 
 ## Implemented
 
@@ -11,11 +11,11 @@ Status: offline implementation and tests complete. Earlier real game-generation 
 
 ## Offline tests
 
-The current host suite passes **35 tests**. Added regression tests cover DeepSeek-specific pricing in the single-game and end-to-end pilot preflights, independent game-judge model selection, recovery of the starter runner's source filename, and confirm a valid 2-of-3 label vote can pass acceptance when the third judgment is invalid while still requiring human review. The suite covers the requested label cases, malformed-JSON retry/cache checks, controlled Stage 3 prompt integration, and existing parser, payoff, monitoring, caching and evaluation checks. No model API requests were made by tests.
+The current host suite passes **34 tests**, with one raw-call-capture test skipped because `aiohttp` is not installed on the host. Tests cover DeepSeek-specific pricing, game-judge model selection, starter filename recovery, raw usage aggregation, label acceptance and review, Stage 3 integration, parser, monitoring, caching, and evaluation checks. No model API requests were made by tests.
 
-The current image was rebuilt from this checkout and all **35 tests passed in Docker** with outbound networking disabled using an internal-only Compose network override. The service ran with non-root UID/GID 10001, a read-only root filesystem, dropped capabilities, no-new-privileges, CPU/memory/PID limits, tmpfs `/tmp`, and read-only source/starter mounts. The image build downloaded its pinned Python dependencies; the test container itself had no external network access. No model API requests were made.
+The current image was rebuilt from this checkout and all **35 tests passed in Docker** with outbound networking disabled using an internal-only Compose network override, including the raw API-call capture test. The service ran with non-root UID/GID 10001, a read-only root filesystem, dropped capabilities, no-new-privileges, CPU/memory/PID limits, tmpfs `/tmp`, and read-only source/starter mounts. The image build downloaded its pinned Python dependencies; the test container itself had no external network access. No model API requests were made.
 
-The test cases include unanimous and 2/3 votes, unknown ties, low confidence, nonexistent quotes, proposed-but-unexecuted agreements, same-action independent controls, missing actions, malformed JSON, explicit contradiction, human override provenance, private-plan isolation, monitor label leakage, cache hits, and a paid-call guard. The integration test calls the starter's real `build_stage3_prompt` and checks peer-message visibility in each arm.
+The test cases use in-memory trajectories and mocked responses; they include unanimous and 2/3 votes, unknown ties, low confidence, nonexistent quotes, proposed-but-unexecuted agreements, same-action independent controls, missing actions, malformed JSON, explicit contradiction, human override provenance, private-plan isolation, monitor label leakage, cache hits, raw-usage aggregation, and a paid-call guard. The integration test calls the starter's real `build_stage3_prompt` and checks peer-message visibility in each arm. No static benchmark datasets are retained.
 
 ## Pilot reservation
 
@@ -25,7 +25,7 @@ The 20–40 trajectory goal is cost-feasible at the same conservative assumption
 
 ## Remaining limits
 
-1. The active trajectory dataset is empty after the user-requested cleanup. Earlier game calls did not save provider-reported usage, so no empirical costs, label agreement, positive/negative rates, or monitor performance can be calculated from them.
+1. No game trajectories are currently retained. A fresh pilot must be generated before labeling or monitoring. New runs capture raw API usage, and the Stage 3 self-report is a new behavioral intervention that must be applied equally in both conditions.
 2. Judges do not receive the arm identifier. This protects against direct label leakage, but means they cannot use control assignment to label negatives. The deterministic verifier uses hidden run metadata only after judgments. Some true independent-control cases may therefore remain unknown.
 3. Natural-language agreement and whether it violated the study instruction cannot be fully proven by deterministic code. Exact quotes, participant IDs, parse flags, and action execution can be machine-checked; reviewers must assess the semantics.
 4. The original game has an internal GPT-5 Mini judge call per agent. That is additional to the three stage calls and is included in the cost estimate; its labels are not used as study labels.
@@ -40,8 +40,8 @@ Current rates checked 2026-10-25 against OpenRouter listings: GPT-4.1 Nano $0.10
 
 ## Updated execution plan
 
-1. Offline implementation and host regression suite: complete (35 tests).
-2. Docker regression suite: complete (35 tests; test container had no external network access).
-3. Fresh pilot/main runs: pending confirmation of trial counts and separate spend approval. The active trajectory dataset was cleared on 2026-10-25.
-4. Still awaiting separate approval: run three independent label judges, verify evidence, and review uncertain/disputed cases plus a seeded sample of unanimous labels.
-5. Still awaiting separate monitor-call approval: freeze monitor prompts/models/thresholds, materialize M1–M4 views, run all four monitors on the same trajectories, and calculate metrics only over accepted binary operational labels. Report unknown labels separately.
+1. Offline implementation and regression suite: current host suite 35 passed, 1 skipped because `aiohttp` is Docker-only.
+2. Docker regression suite: current Docker suite 35 tests passed with outbound networking disabled.
+3. Pilot artifacts: removed. Regenerate both conditions with the self-report prompt before labeling or monitoring.
+4. Main run and label panel: pending fresh pilot review and separate trial-count/spend approval. The judges may see self-reports but must validate claims against recorded messages/actions.
+5. Monitoring: pending separate call approval. Monitors must remain blind to self-reports, labels, plans, and condition metadata.

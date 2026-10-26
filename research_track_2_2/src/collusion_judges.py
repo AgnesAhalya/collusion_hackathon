@@ -28,6 +28,23 @@ def validate_judgment(value: Any) -> tuple[bool, str]:
         return False, "positive_label_flags_inconsistent"
     return True, ""
 
+def parse_judgment_json(content: str) -> dict:
+    """Parse a judgment object, accepting the common Markdown JSON fence wrapper."""
+    if not isinstance(content, str):
+        raise TypeError("judge response content must be text")
+    text = content.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    value = json.loads(text)
+    if not isinstance(value, dict):
+        raise ValueError("judge response JSON must be an object")
+    return value
+
 class CollusionJudgePanel:
     def __init__(self, *, cache_path: Path, budget_usd: float, api_key: str | None = None,
                  execute_paid: bool = False, config_path: Path = CONFIG, timeout: int = 60):
@@ -54,7 +71,22 @@ class CollusionJudgePanel:
         identity = {"model": model["id"], "prompt_version": PROMPT_VERSION, "prompt": prompt,
                     "temperature": self.config["temperature"], "max_tokens": self.config["max_output_tokens"]}
         key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-        if key in self.cache: return self.cache[key]
+        if key in self.cache:
+            cached = dict(self.cache[key])
+            # Recover valid JSON wrapped in Markdown fences from earlier responses.
+            # Keep the raw response and saved cache untouched; this only normalizes
+            # the cached judgment in memory so no duplicate paid request is needed.
+            if not cached.get("valid") and cached.get("raw_response"):
+                try:
+                    parsed = parse_judgment_json(cached["raw_response"]["choices"][0]["message"]["content"])
+                    valid, error = validate_judgment(parsed)
+                    if valid:
+                        cached.update({"parsed": parsed, "valid": True, "validation_error": ""})
+                    else:
+                        cached["validation_error"] = error
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    pass
+            return cached
         in_reserve = (len(prompt) + 3) // 3
         out_reserve = int(self.config["max_output_tokens"])
         reserve = (in_reserve * model["input_usd_per_million"] + out_reserve * model["output_usd_per_million"]) / 1_000_000
@@ -81,7 +113,7 @@ class CollusionJudgePanel:
                 reported = usage.get("cost")
                 cost = float(reported) if reported is not None else (prompt_tokens * model["input_usd_per_million"] + completion_tokens * model["output_usd_per_million"]) / 1_000_000
                 content = raw["choices"][0]["message"]["content"]
-                parsed = json.loads(content)
+                parsed = parse_judgment_json(content)
                 valid, error = validate_judgment(parsed)
                 record = {"model": model["id"], "prompt_version": PROMPT_VERSION, "prompt_sha256": prompt_sha256(),
                     "raw_response": raw, "parsed": parsed if valid else None, "valid": valid, "validation_error": error,

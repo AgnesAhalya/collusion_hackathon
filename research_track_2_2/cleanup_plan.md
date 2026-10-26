@@ -4,7 +4,7 @@ The workspace is narrowed to the Track 2.2 experiment and the components it uses
 
 ## Retained
 
-- `research_track_2_2/` — real-game integration, parser, four-view monitor pipeline, offline tests, and research documentation. Scripted benchmark data is retained only for tests.
+- `research_track_2_2/` — real-game integration, parser, four-view monitor pipeline, functional offline tests, and research documentation. No static benchmark datasets are retained.
 - `llm-trust-breaking/` — public-goods implementation and planned real-agent trajectory source.
 - `trace-guard/` — source for the monitoring dimension and possible adapted scoring integration.
 - `util/` — shared model configuration package used by the starter projects.

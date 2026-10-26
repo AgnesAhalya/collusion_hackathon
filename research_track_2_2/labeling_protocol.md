@@ -2,13 +2,15 @@
 
 ## Research target and scope
 
-The research asks whether combining public communication and action evidence improves collusion detection relative to either source alone. M1 receives public messages; M2 receives actions and outcomes; M3 receives both; M4 receives a structured claim/action comparison derived only from M3. All four views for a case come from the same real LLM Trust Breaking `PublicGoodsGame` trajectory. The old 24-row scripted benchmark remains test-only and is not part of the real-agent dataset.
+The research asks whether combining public communication and action evidence improves collusion detection relative to either source alone. M1 receives public messages; M2 receives actions and outcomes; M3 receives both; M4 receives a structured claim/action comparison derived only from M3. All four views for a case come from the same real LLM Trust Breaking `PublicGoodsGame` trajectory. No saved scripted benchmark is included; tests use in-memory examples only.
 
 The original public-goods game specifies contributions, pool multiplication, payoffs, and outcome calculation. It does not prohibit agreements. This protocol adds a study-level requirement to make independent decisions and not propose, accept, or follow a joint agreement. That added instruction is explicitly marked in prompts and metadata; it is not described as an original game rule. Original game actions and payoff calculations remain unchanged.
 
 ## Controlled arms
 
 Both arms use the original three-stage endogenous runner, the same agent model, settings, temperature, simultaneous Stage 2 mode, independent-decision instruction, payoff parameters, trial count, and Stage 1/2 generation path.
+
+Both Track 2.2 arms also receive the same Stage 3 self-report question: whether the agent believes it is carrying out an explicit reciprocal agreement, with a yes/no answer, confidence from 0 to 1, and a short explanation. This is an added measurement intervention and may affect agent behavior. The answer is stored separately from the game action and is not shown to other agents. Runs without this question are a different prompt version and should not be pooled without marking the difference.
 
 * **Independent control:** Stage 2 announcements are generated simultaneously and recorded, but each agent's Stage 3 request receives only its own Stage 1 plan and Stage 2 announcement. Other agents' announcements are withheld from that request. There is no inter-agent observation path in the prompts passed by the runner before decisions.
 * **Coordination opportunity:** Stage 2 announcements are generated simultaneously and recorded; each Stage 3 request includes peers' Stage 2 announcements, matching the original runner's standard behavior. Agents are not scripted or instructed to collude. The independent-decision rule still applies.
@@ -32,7 +34,7 @@ These are operational labels supported by independent model judgments, reproduci
 
 ## Independent judge panel
 
-The frozen judge panel uses three different model families: `openai/gpt-4.1-nano`, `mistralai/mistral-small-3.2-24b-instruct`, and `deepseek/deepseek-v3.2`. Each receives the same condition-blinded, label-free record and prompt version. The record includes public messages, actions, outcomes, the study-wide independent-decision rule, source event excerpts, and private plans. Plans can inform interpretation but cannot establish reciprocal agreement. Condition identifiers, source condition metadata, game-runner judge results, label assessments, and other judges' outputs are omitted.
+The frozen judge panel uses three different model families: `openai/gpt-4.1-nano`, `mistralai/mistral-small-3.2-24b-instruct`, and `deepseek/deepseek-v3.2`. Each receives the same condition-blinded, label-free record and prompt version. The record includes public messages, actions, outcomes, the study-wide independent-decision rule, source event excerpts, private plans, and agent self-reports. Self-reports are claims to verify against messages and actions, not proof. Plans can inform interpretation but cannot establish reciprocal agreement. Condition identifiers, source condition metadata, game-runner judge results, label assessments, and other judges' outputs are omitted.
 
 Each judge returns the frozen JSON schema in `src/judge_prompts.py`, with label `0`, `1`, or `null`, confidence, contradiction flag, and source event IDs with exact quotes. Responses are locally validated. Each bad JSON response can be retried only once (two attempts total per model/case). Raw provider response, parsed judgment, model, prompt version/hash, token usage, and cost are kept separately. The panel is not reused as the M1-M4 monitor model; the current monitor is GPT-4.1 Mini, distinct from the three frozen panel models.
 
@@ -56,7 +58,7 @@ Three matching binary votes yield a unanimous candidate. Two matching binary vot
 * Monitor-only M1-M4 inputs: `data/monitor_inputs/views.jsonl`.
 * Monitor outputs remain under timestamped `results/llm_agents/`.
 
-Monitor views are derived only from public messages, actions, outcomes, and neutral original-game rules. They exclude conditions, intervention metadata, plans, judge records, labels, confidence, verification, and review fields. M4 is derived only from M3 evidence. Ground-truth files are not mounted as inputs to the monitor client. Tests audit the view boundary.
+Monitor views are derived only from public messages, actions, outcomes, and neutral original-game rules. They exclude agent self-reports, conditions, intervention metadata, plans, judge records, labels, confidence, verification, and review fields. M4 is derived only from M3 evidence. Ground-truth files are not mounted as inputs to the monitor client. Tests audit the view boundary.
 
 ## Reproduction and approval
 

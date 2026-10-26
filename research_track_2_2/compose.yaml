@@ -14,8 +14,6 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     volumes:
-      - ./data/scripted_benchmark:/app/data/scripted_benchmark:ro
-      - ./data/raw:/app/data/raw:ro
       - ./data/llm_agents:/app/data/llm_agents
       - ./data/labels:/app/data/labels
       - ./data/monitor_inputs:/app/data/monitor_inputs
