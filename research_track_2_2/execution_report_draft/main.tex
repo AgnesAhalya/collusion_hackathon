@@ -22,7 +22,9 @@ Multi-agent systems can produce apparent coordination through shared context or 
 We compare four views of the \emph{same} game trajectories so that a difference between monitors can be attributed to the evidence shown, subject to model and sampling limits. The study contributes (1) a two-condition execution protocol using the existing game engine, (2) a three-judge labeling process with source verification and an unknown outcome, and (3) a matched comparison of communication-only, behavior-only, combined, and structured combined monitoring.
 
 \section{Related Work}
-Prior work motivates the study of agent coordination in games and multi-agent settings \citep{nakamura2026colosseum,radev2026best,shi2026agents}. Work on information access and structured monitoring motivates testing multiple views rather than assuming that more raw context is always better \citep{arike2026does,nguyen2026traceguard}. The fourth view here is inspired by structured claim/action checks; it is an adaptation to this public-goods setting, not an evaluation of the original TraceGuard system.
+Research on multi-agent systems has examined how communication and behavior reveal coordination. COLOSSEUM(\cite{nakamura2026colosseum}) investigates collusion through agent messages and observed actions, distinguishing expressed intentions from executed behavior . \cite{radev2026best} show that access to agent communication can improve detection of coordinated sabotage. \cite{shi2026agents} examine differences between private intentions, public commitments, and final actions in repeated games, providing the experimental foundation for our study.
+
+Monitoring research also highlights how evidence presentation affects detection. \cite{arike2026does} find that additional information does not always improve sabotage detection, while \cite{nguyen2026traceguard} introduce TraceGuard, which uses structured assessments of agent behavior. Building on these findings, we compare four monitoring approaches on identical multi-agent trajectories: (1) public messages only, (2) actions and outcomes only, (3) combined messages and actions, and (4) structured combined evidence comparing stated and observed behavior. We investigate whether combining communication and behavioral evidence improves collusion detection over either source alone.
 
 \section{Methods}
 \subsection{Game and experimental conditions}
@@ -94,5 +96,6 @@ Code: \url{https://github.com/AgnesAhalya/collusion_hackathon}. The complete run
 \end{thebibliography}
 
 \section*{LLM Usage Statement}
-Large language models assisted with study planning, code work, and drafting. The author is responsible for design choices, verification of records and citations, and final interpretation. This statement should be updated to match the actual work completed before submission.
+Large language models (LLMs) were used to brainstorm research ideas, summarize and understand related literature, assist with code generation and debugging, and support drafting and editing the report. The research design, implementation decisions, interpretation of results, and final conclusions remained the responsibility of the author. All AI-generated content was reviewed before inclusion.
+
 \end{document}
