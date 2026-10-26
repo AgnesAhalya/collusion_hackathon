@@ -9,7 +9,7 @@ on:
         default: 2
         type: number
       trials_per_condition:
-        description: Trajectories in each condition (pilot default 1)
+        description: Trials in EACH condition (15 = 30 trajectories total)
         required: true
         default: 1
         type: number
@@ -25,7 +25,7 @@ jobs:
   experiment:
     if: ${{ github.actor == github.repository_owner }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       TRACK22_ARTIFACT_PASSPHRASE: ${{ secrets.TRACK22_ARTIFACT_PASSPHRASE }}
@@ -78,8 +78,10 @@ jobs:
           judge = os.environ['GAME_JUDGE_MODEL']
           agents = int(os.environ['AGENTS'])
           trials = int(os.environ['TRIALS_PER_CONDITION'])
-          assert 2 <= agents <= 6, 'agents must be 2–6'
-          assert 1 <= trials <= 10, 'trials per condition must be 1–10'
+          if not 2 <= agents <= 6:
+              raise SystemExit('::error::Enter 2–6 agents per game.')
+          if not 1 <= trials <= 15:
+              raise SystemExit('::error::Enter 1–15 trials per condition. Total trajectories = 2 × trials per condition.')
           assert agent == judge == 'deepseek/deepseek-v3.2'
           assert os.environ['MONITOR_MODEL'] == 'openai/gpt-4.1-mini'
           panel = load_config()['models']
@@ -95,9 +97,12 @@ jobs:
               return math.ceil(value * factor * 10000) / 10000
           game_cap = cap(game['estimated_cost_usd'], 1.25)
           label_cap = cap(full['cost_reserve_usd']['three_label_judges'], 1.25)
-          monitor_cap = cap(full['cost_reserve_usd']['four_monitors'], 3.3)
+          monitor_cap = cap(full['cost_reserve_usd']['four_monitors'], 1.25)
           total_cap = 2 * game_cap + label_cap + monitor_cap
-          assert total_cap <= 3.50, 'calculated run cap exceeds $3.50; reduce agents or trials'
+          if total_cap > 3.50:
+              raise SystemExit(f'::error::{agents} agents and {trials} trials per condition '
+                  f'produce {2 * trials} trajectories and reserve ${total_cap:.4f}, '
+                  'above the $3.50 limit. Reduce agents or trials.')
           with Path(os.environ['GITHUB_ENV']).open('a') as out:
               out.write(f'GAME_CAP_USD={game_cap}\nLABEL_CAP_USD={label_cap}\nMONITOR_CAP_USD={monitor_cap}\n')
           print(json.dumps({'models': {'agents': agent, 'native_game_judge': judge,
@@ -133,6 +138,16 @@ jobs:
               --seed-base "$GAME_SEED_BASE" \
               --max-cost-usd "$GAME_CAP_USD" --execute-paid
           done
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          from src.real_cli import _monitor_preflight
+          rows = [json.loads(line) for line in Path('data/llm_agents/trajectories.jsonl').read_text().splitlines() if line.strip()]
+          estimate = _monitor_preflight(rows, os.environ['MONITOR_MODEL'])
+          if estimate['estimated_monitor_cost_usd_with_3x_safety_margin'] > float(os.environ['MONITOR_CAP_USD']):
+              raise SystemExit('::error::Actual monitor prompt reserve exceeds the preflight cap; no label or monitor calls made.')
+          print(json.dumps(estimate, indent=2))
+          PY
           docker compose run --rm --no-deps track22 \
             python -m src.ground_truth_pipeline label \
             --budget-usd "$LABEL_CAP_USD" --execute-paid

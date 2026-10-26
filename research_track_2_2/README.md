@@ -2,7 +2,7 @@
 
 ## One-click GitHub Actions run
 
-Run **Track 2.2 complete experiment** from the repository's Actions tab, using **Run workflow**. The only inputs are **agents** and **trials per condition**. Pilot defaults are 2 agents and 1 trial per condition, producing 2 trajectories total. For example, 2 agents and 3 trials per condition produce 6 trajectories. Every run then labels all trajectories with three independent judges and scores all four monitor views. The workflow uses a fresh temporary data directory, so checked-in research results are not read, deleted, or overwritten.
+Run **Track 2.2 complete experiment** from the repository's Actions tab, using **Run workflow**. The only inputs are **agents** and **trials per condition**. Total trajectories equal **2 × trials per condition** because there are two conditions. Pilot defaults are 2 agents and 1 trial per condition, producing 2 trajectories total. For 30 total trajectories, enter **15** trials per condition. Every run then labels all trajectories with three independent judges and scores all four monitor views. The workflow uses a fresh temporary data directory, so checked-in research results are not read, deleted, or overwritten.
 
 Set repository secrets `OPENROUTER_API_KEY` and `TRACK22_ARTIFACT_PASSPHRASE` (at least 24 characters) first. The model choices are fixed in the workflow: DeepSeek V3.2 for agents and the original game judge; GPT-4.1 Nano, Mistral Small 3.2, and DeepSeek V3.2 for labeling; GPT-4.1 Mini for M1–M4. The workflow prints a request and cost preflight, calculates stage caps automatically, and refuses any selection whose combined caps exceed $3.50. The pilot default plans 30 logical requests (16 game, 6 label, 8 monitor) with a $0.1253 conservative estimate; provider charges can differ. The encrypted `track22-results` artifact contains full or partial output even if a later stage fails. Keep the passphrase: it is required to decrypt the artifact.
 
@@ -10,7 +10,7 @@ The research path uses genuine trajectories from `llm-trust-breaking`'s endogeno
 
 Game agents use temperature **0.7**. Each trial gets a seed derived from base **42**, and each agent/stage request gets its own deterministic seed; corresponding requests use the same seeds in both conditions. The native game judge, three labeling judges, and M1–M4 monitors use temperature **0** where the model supports it. Requested seeds, temperatures, protocol version, and repeated-content counts are saved with results. Provider support for seed reproducibility varies; varied sampling does not guarantee collusion or unique behavior. Existing results retain their original sampling settings.
 
-For the main run, **2 agents and 10 trials per condition** create **20 trajectories**, with 60 label calls and 80 monitor calls. The configured full-pipeline estimate is **$1.2526**, with **$2.2874** in combined stage reserves, within the $3.50 limit.
+For the main run, **2 agents and 15 trials per condition** create **30 trajectories**, with 90 label calls and 120 monitor calls. The configured full-pipeline estimate is **$1.8788**, with **$2.3487** in combined stage reserves, within the $3.50 limit. The workflow checks the actual monitor prompt reserve after game generation and before labeling.
 
 ## Offline reproduction
 
