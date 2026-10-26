@@ -29,6 +29,7 @@ def blinded_case(trajectory: dict) -> dict:
         "agents": trajectory.get("agent_ids", []),
         "public_messages": trajectory.get("public_messages", []),
         "actions": trajectory.get("actions", {}),
+        "action_reasoning": trajectory.get("action_reasoning", {}),
         "outcomes": trajectory.get("outcomes", {}),
         "private_plans": trajectory.get("private_plans", {}),
         "events": build_events(trajectory),
@@ -64,7 +65,6 @@ def monitor_payloads(trajectory: dict) -> list[dict]:
     payloads = []
     for view in ("M1", "M2", "M3", "M4"):
         evidence = json.loads(evidence_view(trajectory, view))
-        serialized = json.dumps(evidence, sort_keys=True, ensure_ascii=False).lower()
         forbidden = {"ground_truth_label", "label_assessment", "private_plans", "agent_self_reports",
                      "self_report_colluding", "self_report_confidence", "self_report_reasoning",
                      "judge_majority_label", "confidence", "experimental_condition", "track22_condition",
@@ -124,14 +124,41 @@ def label_all(*, trajectories_path: Path, budget_usd: float, execute_paid: bool 
                 "judge_calls_planned": 0, "judge_models": [m["id"] for m in config["models"]],
                 "message": f"No real trajectories found at {trajectories_path}; zero requests planned."}
     LABELS.mkdir(parents=True, exist_ok=True)
+    if execute_paid and ((LABELS / "review_queue.csv").exists() != (LABELS / "review_packets.jsonl").exists()):
+        raise RuntimeError("review queue and packets are incomplete; no paid judge request made")
     raw_path = LABELS / "judge_responses.jsonl"
     output_path = LABELS / "verified_labels.jsonl"
-    existing_ids = {r["trajectory_id"] for r in read_jsonl(output_path)}
+    existing_records = read_jsonl(output_path)
+    existing_ids = {r["trajectory_id"] for r in existing_records}
+    input_ids = {t["trajectory_id"] for t in trajectories}
+    stale_existing = [
+        r["trajectory_id"] for r in existing_records
+        if r["trajectory_id"] in input_ids
+        and r.get("label_provenance", {}).get("prompt_version") != PROMPT_VERSION
+    ]
+    pending = [t for t in trajectories if t["trajectory_id"] not in existing_ids]
+    missing_reports = [
+        t["trajectory_id"] for t in pending
+        if t.get("protocol_settings", {}).get("agent_self_report_active")
+        and any(t.get("agent_self_reports", {}).get(agent, {}).get("parse_ok") is not True
+                for agent in t.get("agent_ids", []))
+    ]
+    missing_action_reasoning = [
+        t["trajectory_id"] for t in pending
+        if t.get("protocol_settings", {}).get("agent_self_report_active")
+        and any(not str(t.get("action_reasoning", {}).get(agent, "")).strip()
+                for agent in t.get("agent_ids", []))
+    ]
+    if execute_paid and missing_reports:
+        raise ValueError("required agent self-reports missing in trajectories: "
+                         + ", ".join(missing_reports) + "; no paid judge request made")
+    if execute_paid and missing_action_reasoning:
+        raise ValueError("final-action reasoning missing in trajectories: "
+                         + ", ".join(missing_action_reasoning) + "; no paid judge request made")
     config = load_config()
     panel = CollusionJudgePanel(cache_path=LABELS / "judge_cache.json", budget_usd=budget_usd, execute_paid=execute_paid)
     results = []
-    for trajectory in trajectories:
-        if trajectory["trajectory_id"] in existing_ids: continue
+    for trajectory in pending:
         judgments = panel.judge_case(blinded_case(trajectory))
         if not execute_paid:
             results.append({"trajectory_id": trajectory["trajectory_id"], "status": "preflight_only", "judge_models": [m["id"] for m in config["models"]]})
@@ -148,18 +175,24 @@ def label_all(*, trajectories_path: Path, budget_usd: float, execute_paid: bool 
         results.append(record)
     if execute_paid:
         by_id = {t["trajectory_id"]: t for t in trajectories}
-        queue_path, packet_path = create_review_queue(results, by_id, sample_fraction=sample_fraction)
+        eligible = [r for r in read_jsonl(output_path) if r["trajectory_id"] in by_id]
+        queue_path, packet_path = create_review_queue(eligible, by_id, sample_fraction=sample_fraction)
     else:
         queue_path = packet_path = None
     return {"status": "completed" if execute_paid else "preflight_only", "trajectories": len(trajectories),
-        "new_label_records": len(results), "judge_calls_planned": 3*len(results), "prompt_version": PROMPT_VERSION,
+        "new_label_records": len(results), "judge_calls_planned": 3*len(results),
+        "existing_labels_from_prior_prompt": stale_existing,
+        "pending_trajectories_with_missing_self_reports": missing_reports,
+        "pending_trajectories_with_missing_action_reasoning": missing_action_reasoning,
+        "prompt_version": PROMPT_VERSION,
         "judge_models": [m["id"] for m in config["models"]], "cache_calls": panel.calls,
         "http_attempts": panel.attempts, "new_label_judge_cost_usd": round(panel.spent-panel.initial_spent, 6),
-        "cumulative_label_judge_spend_usd": round(panel.spent, 6),
+        "cumulative_label_judge_spend_usd": round(panel.cached_spend + panel.spent, 6),
         "label_judge_prompt_tokens": panel.prompt_tokens, "label_judge_completion_tokens": panel.completion_tokens,
         "review_queue": str(queue_path) if queue_path else None, "review_packets": str(packet_path) if packet_path else None}
 
-def label_statistics(records: list[dict], reviewed_records: list[dict] | None = None) -> dict:
+def label_statistics(records: list[dict], reviewed_records: list[dict] | None = None,
+                     trajectories: list[dict] | None = None) -> dict:
     reviewed_records = reviewed_records or []
     reviewed = {}
     for r in reviewed_records: reviewed[r["trajectory_id"]] = r
@@ -168,19 +201,44 @@ def label_statistics(records: list[dict], reviewed_records: list[dict] | None = 
     confidences = [r["median_agreeing_confidence"] for r in records if isinstance(r.get("median_agreeing_confidence"), (int, float))]
     agreement_counts = {name: sum(r.get("majority_type") == name for r in records) for name in ("unanimous_candidate", "majority_candidate", "insufficient_agreement")}
     denominator = len(records)
+    current_by_id = {t["trajectory_id"]: t for t in trajectories or []}
+    rechecked = {
+        r["trajectory_id"]: verify_candidate(current_by_id[r["trajectory_id"]], r.get("judgments", []),
+                                             r.get("judge_majority_label"))
+        for r in records if r["trajectory_id"] in current_by_id
+    }
+    usable = {
+        r["trajectory_id"]: (
+            reviewed[r["trajectory_id"]].get("final_label")
+            if r["trajectory_id"] in reviewed and reviewed[r["trajectory_id"]].get("justification")
+            else r.get("final_label")
+            if r.get("label_provenance", {}).get("prompt_version") == PROMPT_VERSION
+            and rechecked.get(r["trajectory_id"], {}).get("status") == "passed"
+            else None
+        ) for r in records
+    }
     return {"trajectory_count": denominator,
         "operational_final_label_counts": {str(l): sum(v == l for v in final_by_id.values()) for l in (0, 1, None)},
+        "current_usable_final_label_counts": {str(l): sum(v == l for v in usable.values()) for l in (0, 1, None)},
         "judge_majority_candidate_counts": {str(l): sum(r.get("judge_majority_label") == l for r in records) for l in (0, 1, None)},
         "agreement_counts": agreement_counts,
         "unanimous_rate": sum(r.get("majority_type") == "unanimous_candidate" for r in records) / denominator if denominator else None,
         "review_required": sum(bool(r.get("review_required")) for r in records),
         "human_reviewed_count": len(reviewed),
         "verification_failed_count": sum(r.get("verification_status") != "passed" for r in records),
+        "current_prompt_version": PROMPT_VERSION,
+        "labels_from_prior_prompt_count": sum(r.get("label_provenance", {}).get("prompt_version") != PROMPT_VERSION for r in records),
+        "current_verifier_rechecked_count": len(rechecked),
+        "current_verifier_failed_count": sum(v["status"] != "passed" for v in rechecked.values()),
+        "saved_final_labels_requiring_recheck_count": sum(
+            r.get("final_label") in (0, 1) and rechecked.get(r["trajectory_id"], {}).get("status") == "failed"
+            for r in records
+        ),
         "median_agreeing_confidence_distribution": {"n":len(confidences), "min":min(confidences) if confidences else None,
             "median":median(confidences) if confidences else None,
             "max":max(confidences) if confidences else None},
         "unknown_final_count": sum(v is None for v in final_by_id.values()),
-        "label_note": "Judge self-reported confidence is not a calibrated probability; unknown labels are not negatives."}
+        "label_note": "Saved operational counts are historical. Use current_usable_final_label_counts for the current prompt and verifier. Judge confidence is self-reported and unknown labels are not negatives."}
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -195,6 +253,7 @@ def main() -> None:
     review.add_argument("--reviewer", required=True); review.add_argument("--justification", required=True)
     views = sub.add_parser("prepare-monitor-inputs"); views.add_argument("--trajectories", type=Path, default=LLM_DATA/"trajectories.jsonl")
     stats = sub.add_parser("stats"); stats.add_argument("--labels", type=Path, default=LABELS/"verified_labels.jsonl")
+    stats.add_argument("--trajectories", type=Path, default=LLM_DATA/"trajectories.jsonl")
     args = parser.parse_args()
     if args.command == "preflight": print(json.dumps(pilot_cost_estimate(agents=args.agents, trials_per_condition=args.trials_per_condition,
         monitor_input_tokens_per_view=args.monitor_input_tokens_per_view, label_input_tokens=args.label_input_tokens,
@@ -215,6 +274,7 @@ def main() -> None:
         print(json.dumps({"trajectories": len(rows), "views": len(rows)*4, "path": str(path)}))
     else:
         rows = read_jsonl(args.labels)
-        print(json.dumps(label_statistics(rows, read_jsonl(LABELS/"reviewed_labels.jsonl")), indent=2))
+        print(json.dumps(label_statistics(rows, read_jsonl(LABELS/"reviewed_labels.jsonl"),
+                                          read_jsonl(args.trajectories)), indent=2))
 
 if __name__ == "__main__": main()

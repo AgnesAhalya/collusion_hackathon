@@ -1,6 +1,6 @@
 # Track 2.2: evidence views over public-goods trajectories
 
-The research path uses genuine trajectories from `llm-trust-breaking`'s endogenous public-goods runner. Static benchmark datasets and prior pilot outputs have been removed; no experiment data is currently retained. New Track 2.2 runs ask agents for a Stage 3 yes/no collusion self-report with confidence. Judges may see it as evidence; monitor views exclude it. This self-report changes the game prompt, so older runs must not be pooled with new ones without marking the prompt version.
+The research path uses genuine trajectories from `llm-trust-breaking`'s endogenous public-goods runner. No pilot run data or labels are currently retained. See [FLOW_AUDIT.md](FLOW_AUDIT.md) for the checked flow. New Track 2.2 runs ask agents for a Stage 3 yes/no collusion self-report with confidence. Judges may see it as evidence; monitor views exclude it. The live prompt text is in [prompts/](prompts/README.md), with separate files for each game stage, judge, and monitor prompt.
 
 ## Offline reproduction
 
@@ -22,7 +22,7 @@ The following prints a conservative estimate only:
 python -m src.real_cli run-game --agents 2 --trials 1 --model openai/gpt-4.1-mini
 ```
 
-After separate approval of the printed cost, the operator must pass `--execute-paid --max-cost-usd <approved-limit>`. The wrapper invokes `llm-trust-breaking/experiments/run_endogenous.py` with `--game publicgoods --rounds 1`, does not replace any prompts, stages, game rule, or payoff, and uses simultaneous Stage 2 by default. It saves the starter's native JSON under `data/llm_agents/source_runs/` and appends parsed genuine trajectories to `data/llm_agents/trajectories.jsonl`. It never reads or prints API keys. The starter uses its normal configured endpoint and its default retry behavior.
+After separate approval of the printed cost, the operator must pass `--execute-paid --max-cost-usd <approved-limit>`. The wrapper invokes `llm-trust-breaking/experiments/run_endogenous.py` with `--game publicgoods --rounds 1`, loads the Track 2.2 prompts from `prompts/`, preserves the original game rules and payoff calculation, and uses simultaneous Stage 2 by default. It saves the starter's native JSON under `data/llm_agents/source_runs/` and appends parsed genuine trajectories to `data/llm_agents/trajectories.jsonl`. It never reads or prints API keys. The starter uses its normal configured endpoint and its default retry behavior.
 
 For an existing native JSON run, offline parsing is:
 
@@ -82,8 +82,7 @@ python3 -m src.ground_truth_pipeline label --budget-usd 0.02 --execute-paid
 ```
 
 <!-- docker compose run --rm --no-deps track22 \ python -m src.ground_truth_pipeline stats -->
-<!-- docker ps --filter label=com.docker.compose.service=track22 \
-  --format "table {{.Status}}\t{{.Names}}" -->
+
 
 This stores individual raw judge responses and separate candidate/verified labels under `data/labels/`; disputed cases and a seeded sample of unanimous cases enter `review_queue.csv`. The three judges are GPT-4.1 Nano, Mistral Small 3.2, and DeepSeek V3.2. They are separate from the GPT-4.1 Mini monitoring model. Human decisions require a reviewer and written justification, and are logged without replacing judge outputs.
 

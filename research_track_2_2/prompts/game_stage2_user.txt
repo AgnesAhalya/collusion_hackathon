@@ -1,0 +1,9 @@
+It is now time to write a recorded announcement.
+
+$announcement_context
+
+Your private plan (known only to you):
+  - Intended action: $intended_action
+  - Your reasoning: $private_reasoning
+
+$announcement_instruction

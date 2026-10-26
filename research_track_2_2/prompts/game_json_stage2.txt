@@ -1,0 +1,4 @@
+IMPORTANT: Respond with ONLY a valid JSON object in this exact format:
+{"stated_action": <your_announced_action>, "message": "your full recorded announcement"}
+where <your_announced_action> must be $action_desc.
+Do not include any other text, explanation, or markdown. Just the JSON object.

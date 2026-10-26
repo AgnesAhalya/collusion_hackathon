@@ -27,3 +27,4 @@ services:
       LLM_TRUST_BREAKING_ROOT: /workspace/llm-trust-breaking
       POSEIDON_UTIL_ROOT: /workspace/util
       PYTHONPATH: /workspace/util
+      TRACK22_PROMPT_DIR: /app/prompts

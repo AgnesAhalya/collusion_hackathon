@@ -1,0 +1,5 @@
+IMPORTANT: Respond with ONLY a valid JSON object in this exact format:
+{"intended_action": <your_action_here>, "reasoning": "your private reasoning"}
+where <your_action_here> must be $action_desc.
+Your reasoning should cover your intended action, what you plan to say in your announcement, and how you will make your final decision with the information available in this condition.
+Do not include any other text, explanation, or markdown. Just the JSON object.

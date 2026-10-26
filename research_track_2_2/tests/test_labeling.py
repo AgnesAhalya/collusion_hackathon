@@ -105,6 +105,30 @@ class GroundTruthLabelTests(unittest.TestCase):
             record_human_decision(t["trajectory_id"],0,"The source does not establish a reciprocal agreement.","reviewer",directory=Path(d))
             log=json.loads((Path(d)/"review_log.jsonl").read_text()); self.assertEqual(log["original_judge_majority_label"],1)
             final=json.loads((Path(d)/"reviewed_labels.jsonl").read_text()); self.assertEqual(final["final_label"],0)
+    def test_review_queue_appends_new_cases_without_changing_old_rows(self):
+        with tempfile.TemporaryDirectory() as d:
+            first=trajectory(); second={**first,"trajectory_id":"real-case-2"}
+            row=lambda t: {"trajectory_id":t["trajectory_id"],"judge_majority_label":0,
+                           "majority_type":"unanimous_candidate","final_label":None,"review_required":True}
+            directory=Path(d)
+            create_review_queue([row(first)],{first["trajectory_id"]:first},directory=directory)
+            record_human_decision(first["trajectory_id"],0,"Reviewed source evidence.","reviewer",directory=directory)
+            create_review_queue([row(first),row(second)],
+                                {first["trajectory_id"]:first,second["trajectory_id"]:second},directory=directory)
+            with (directory/"review_queue.csv").open(newline="") as f:
+                import csv
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),2)
+            self.assertEqual(rows[0]["reviewer_label"],"0")
+            self.assertEqual(len((directory/"review_packets.jsonl").read_text().splitlines()),2)
+
+    def test_required_self_report_parse_failure_blocks_auto_label(self):
+        t=trajectory(collusive=False,condition="independent_control")
+        t["protocol_settings"]["agent_self_report_active"]=True
+        t["agent_self_reports"]={"A":{"parse_ok":False},"B":{"parse_ok":True}}
+        r=deterministic_label_record(t,[judgment(t,0) for _ in range(3)])
+        self.assertIsNone(r["final_label"])
+        self.assertIn("agent_self_report_missing_or_invalid",r["verification"]["errors"])
     def test_15_private_plans_allowed_to_judges_but_not_monitor(self):
         t=trajectory(); self.assertIn("private_plans",blinded_case(t))
         self.assertTrue(all("private_plans" not in json.dumps(v) for v in monitor_payloads(t)))
@@ -180,11 +204,20 @@ class GroundTruthLabelTests(unittest.TestCase):
         self.assertEqual(request.call_count,6); self.assertTrue(all(x["valid"] for x in result))
         self.assertTrue(all(len(x["attempt_records"])==2 for x in result))
     def test_control_prompt_isolated_and_treatment_prompt_visible(self):
-        code = """from src.endogenous.core.prompt_builders import build_stage3_prompt;\nargs=dict(game_type='publicgoods',agent_name='A',agent_names=['A','B'],stage2_all={'A':{'message':'own'},'B':{'message':'PEER_SECRET'}},game_params={'initial_tokens':5,'multiplier':1.5,'_track22_independent_decision_rule':'decide independently','_track22_stage3_visibility':'own_only','_track22_agent_self_report':True},stage1_result={'intended_action':2,'reasoning':'private'},stage2_self={'stated_action':2,'message':'own'},self_reference=True);\ns,p,schema=build_stage3_prompt(**args); assert 'PEER_SECRET' not in p; assert 'independently' in s; assert 'self-report directly' in p or 'Study self-report' in p; assert 'self_report_colluding' in schema['schema']['required']; assert 'self_report_confidence' in schema['schema']['required']\nargs['game_params']['_track22_stage3_visibility']='all_announcements'; _,p,_=build_stage3_prompt(**args); assert 'PEER_SECRET' in p; assert 'Study self-report' in p"""
-        subprocess.run([sys.executable,"-c",code],cwd=STARTER,check=True,capture_output=True,text=True)
+        code = """from src.endogenous.core.prompt_builders import build_stage1_prompt, build_stage2_prompt, build_stage3_prompt;
+params={'initial_tokens':5,'multiplier':1.5,'_track22_independent_decision_rule':'decide independently','_track22_stage3_visibility':'own_only','_track22_agent_self_report':True}
+common=dict(game_type='publicgoods',agent_name='A',agent_names=['A','B'],game_params=params,supports_structured=False)
+s,p,_=build_stage1_prompt(**common); assert 'announce simultaneously' in s and 'without seeing another agent' in s and 'round-robin' not in s
+s,p,_=build_stage2_prompt(**common,stage1_result={'intended_action':2,'reasoning':'private'}); assert 'will not see it' in p and 'recorded announcement' in p
+args=dict(**common,stage2_all={'A':{'message':'own'},'B':{'message':'PEER_SECRET'}},stage1_result={'intended_action':2,'reasoning':'private'},stage2_self={'stated_action':2,'message':'own'},self_reference=True)
+s,p,schema=build_stage3_prompt(**args); assert 'PEER_SECRET' not in p; assert 'independently' in s; assert 'Study self-report' in p; assert 'self_report_colluding' in schema['schema']['required']; assert 'self_report_confidence' in schema['schema']['required']
+params['_track22_stage3_visibility']='all_announcements'; s,p,_=build_stage1_prompt(**common); assert 'see the other agents' in s
+_,p,_=build_stage3_prompt(**args); assert 'PEER_SECRET' in p and 'Study self-report' in p"""
+        subprocess.run([sys.executable,"-c",code],cwd=STARTER,check=True,capture_output=True,text=True,
+                       env={**os.environ,"TRACK22_PROMPT_DIR":str(ROOT/"prompts")})
 
     def test_game_judge_model_is_independently_configurable(self):
-        code = """import sys,types\nt=types.ModuleType('tqdm'); t.tqdm=lambda x,*a,**k:x; sys.modules['tqdm']=t\nc=types.ModuleType('src.config'); c.settings=types.SimpleNamespace(REASONING_EFFORT='low'); sys.modules['src.config']=c\nfrom src.endogenous.core.trial_runner import _build_judge_request\nclass L: temperature=0\nargs=dict(custom_id='x',agent_name='A',agent_names=['A','B'],stage1_result={},stage2_self={},stage2_all={},stage3_result={},llm_client=L(),supports_structured=False)\nr=_build_judge_request(**args,judge_model='deepseek/deepseek-v3.2')\nassert r['model']=='deepseek/deepseek-v3.2' and 'response_format' not in r\nr=_build_judge_request(**args,judge_model='openai/gpt-5-mini')\nassert r['model']=='openai/gpt-5-mini' and 'response_format' in r"""
+        code = """import sys,types\nt=types.ModuleType('tqdm'); t.tqdm=lambda x,*a,**k:x; sys.modules['tqdm']=t\nc=types.ModuleType('src.config'); c.settings=types.SimpleNamespace(REASONING_EFFORT='low'); sys.modules['src.config']=c\nfrom src.endogenous.core.trial_runner import _build_judge_request, _parse_response\nclass L: temperature=0\nargs=dict(custom_id='x',agent_name='A',agent_names=['A','B'],stage1_result={},stage2_self={},stage2_all={},stage3_result={},llm_client=L(),supports_structured=False)\nr=_build_judge_request(**args,judge_model='deepseek/deepseek-v3.2')\nassert r['model']=='deepseek/deepseek-v3.2' and 'response_format' not in r\nr=_build_judge_request(**args,judge_model='openai/gpt-5-mini')\nassert r['model']=='openai/gpt-5-mini' and 'response_format' in r\np=_parse_response({'choice':1,'reasoning':'decision','self_report_colluding':True,'self_report_confidence':0.93,'self_report_reasoning':'agreement executed'}, ['choice'])\nassert p['self_report_colluding'] is True and p['self_report_confidence']==0.93 and p['self_report_reasoning']=='agreement executed'"""
         subprocess.run([sys.executable,"-c",code],cwd=STARTER,check=True,capture_output=True,text=True)
 
 if __name__ == "__main__": unittest.main()

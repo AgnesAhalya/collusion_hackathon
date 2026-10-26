@@ -227,6 +227,12 @@ def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_i
             for agent in trajectory.get("agent_ids", [])
             for stage in ("stage1", "stage2", "stage3")
         )
+        if trajectory.get("protocol_settings", {}).get("agent_self_report_active"):
+            complete = complete and all(
+                trajectory.get("agent_self_reports", {}).get(agent, {}).get("parse_ok") is True
+                and str(trajectory.get("action_reasoning", {}).get(agent, "")).strip()
+                for agent in trajectory.get("agent_ids", [])
+            )
         lines.extend([f"**Trajectory completeness:** {'Passed' if complete else 'Needs review'}; parse errors: {parse_errors}.", ""])
         summary.setdefault("trajectory_checks", []).append({
             "trajectory_id": trajectory.get("trajectory_id"), "complete": complete,
@@ -268,6 +274,10 @@ def run_real_game(*, agents: int = 2, trials: int = 1, model: str = DEFAULT_AGEN
     environment["LLM_BASE_URL"] = "https://openrouter.ai/api/v1"
     environment["LLM_API_KEY"] = openrouter_key
     environment["OPENROUTER_MODEL"] = model
+    if condition:
+        environment["TRACK22_PROMPT_DIR"] = str(ROOT / "prompts")
+    else:
+        environment.pop("TRACK22_PROMPT_DIR", None)
     utility_path = str(UTILITY)
     environment["PYTHONPATH"] = utility_path + os.pathsep + environment.get("PYTHONPATH", "")
     source_dir = LLM_DATA / "source_runs"

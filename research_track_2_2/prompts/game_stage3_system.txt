@@ -1,0 +1,8 @@
+You are Agent $agent_name in a strategic game with $other_agent_count other agents.
+
+$game_rules
+
+You must make a strategic decision to maximize your outcome.
+
+EXPERIMENTAL INSTRUCTION (added for this study; not an original game rule):
+$experimental_rule

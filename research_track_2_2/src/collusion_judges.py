@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib, json, os, time, urllib.error, urllib.request
 from pathlib import Path
 from typing import Any
-from .judge_prompts import OUTPUT_SCHEMA, PROMPT_VERSION, make_prompt, prompt_sha256
+from .judge_prompts import OUTPUT_SCHEMA, PROMPT_VERSION, SYSTEM_PROMPT, make_prompt, prompt_sha256
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "configs" / "judge_models.json"
@@ -56,8 +56,9 @@ class CollusionJudgePanel:
         self.execute_paid = execute_paid
         self.budget_usd = float(budget_usd)
         self.timeout = timeout
-        self.spent = sum(float(r.get("cost_usd", 0)) for r in self.cache.values())
-        self.initial_spent = self.spent
+        self.cached_spend = sum(float(r.get("cost_usd", 0)) for r in self.cache.values())
+        self.spent = 0.0  # --budget-usd limits only new requests in this invocation.
+        self.initial_spent = 0.0
         self.calls = 0
         self.attempts = 0
         self.prompt_tokens = 0
@@ -68,7 +69,8 @@ class CollusionJudgePanel:
             return {"status": "preflight_only", "model": model["id"], "prompt_sha256": prompt_sha256()}
         if not self.api_key: raise RuntimeError("OPENROUTER_API_KEY missing; no judge request made")
         if self.budget_usd <= 0: raise RuntimeError("positive label-judge spend cap required")
-        identity = {"model": model["id"], "prompt_version": PROMPT_VERSION, "prompt": prompt,
+        identity = {"model": model["id"], "prompt_version": PROMPT_VERSION,
+                    "prompt_sha256": prompt_sha256(), "prompt": prompt,
                     "temperature": self.config["temperature"], "max_tokens": self.config["max_output_tokens"]}
         key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         if key in self.cache:
@@ -87,13 +89,13 @@ class CollusionJudgePanel:
                 except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                     pass
             return cached
-        in_reserve = (len(prompt) + 3) // 3
         out_reserve = int(self.config["max_output_tokens"])
-        reserve = (in_reserve * model["input_usd_per_million"] + out_reserve * model["output_usd_per_million"]) / 1_000_000
         body = json.dumps({"model": model["id"], "temperature": self.config["temperature"],
             "max_tokens": out_reserve, "usage": {"include": True},
-            "messages": [{"role": "system", "content": "Return only a JSON object matching the supplied schema. Do not invent source events."},
+            "messages": [{"role": "system", "content": SYSTEM_PROMPT},
                          {"role": "user", "content": prompt + "\n\nRequired JSON Schema:\n" + json.dumps(OUTPUT_SCHEMA)}]}).encode()
+        in_reserve = (len(body) + 2) // 3
+        reserve = (in_reserve * model["input_usd_per_million"] + out_reserve * model["output_usd_per_million"]) / 1_000_000
         req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=body,
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
                      "HTTP-Referer": "https://github.com/poseidon-research/collusion_hackathon", "X-Title": "Track 2.2 labeling"})

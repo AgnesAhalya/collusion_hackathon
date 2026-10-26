@@ -40,6 +40,12 @@ def evidence_view(t: dict, condition: str) -> str:
     forbidden = ("ground_truth", "coordination_condition", "private_plans", "agent_self_reports",
                  "self_report_colluding", "self_report_confidence", "self_report_reasoning",
                  "verified_coordination", "rule_violation", "label_evidence", "label_provenance", "label_source")
-    text = _serialize(payload)
-    if any(x in text for x in forbidden): raise AssertionError("hidden metadata leaked into evidence")
-    return text
+    def keys(value):
+        if isinstance(value, dict):
+            return set(value).union(*(keys(item) for item in value.values()))
+        if isinstance(value, list):
+            return set().union(*(keys(item) for item in value)) if value else set()
+        return set()
+    if keys(payload) & set(forbidden):
+        raise AssertionError("hidden metadata leaked into evidence")
+    return _serialize(payload)

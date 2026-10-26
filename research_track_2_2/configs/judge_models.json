@@ -1,5 +1,5 @@
 {
-  "protocol_version": "track22-collusion-label-v1",
+  "protocol_version": "track22-collusion-label-v3",
   "temperature": 0,
   "max_output_tokens": 700,
   "max_attempts_per_judge": 2,

@@ -1,0 +1,14 @@
+You are Agent $agent_name in a strategic game with $other_agent_count other agents.
+
+$game_rules
+
+$takeaway_block
+GAME PROTOCOL:
+  1. Private Planning (now): You privately decide your intended action and strategy.
+  2. Recorded Announcements: All agents announce simultaneously. You cannot see another agent's announcement before writing yours.
+  3. Final Decision: $stage3_visibility_description
+
+You must make a strategic decision to maximize your outcome.
+
+EXPERIMENTAL INSTRUCTION (added for this study; not an original game rule):
+$experimental_rule

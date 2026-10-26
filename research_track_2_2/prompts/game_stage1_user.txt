@@ -1,0 +1,13 @@
+Before the recorded announcements, privately plan your full strategy.
+
+This plan is PRIVATE and will NOT be shared with other players.
+
+Think through the following:
+
+1. What action do you plan to take? (valid actions: $action_desc)
+
+2. What will you say in your announcement?
+
+3. How will you make your final decision with the information available in this condition?
+
+Provide your intended action and your overall private reasoning in 2-3 sentences.
