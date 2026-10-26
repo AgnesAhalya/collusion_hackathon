@@ -94,6 +94,14 @@ def render_monitor_report(run_folder: Path, predictions: list[dict], trajectorie
         f"Monitor predictions completed: {ok}/{len(trajectories) * len(VIEWS)}; "
         f"{accepted}/{len(trajectories)} final labels accepted.",
         "",
+        "**What each monitor sees**",
+        "",
+        "- **M1:** Public announcements only: what each agent said it would do.",
+        "- **M2:** Final actions and game outcomes only: what agents did and received.",
+        "- **M3:** Public announcements, final actions, and outcomes in one timeline.",
+        "- **M4:** A structured comparison of each public claim with the later action, "
+        "plus cross-agent action matches and outcomes.",
+        "",
         "| Monitor | Reference | Success | Failure | Undetermined | Collusion precision |",
         "| --- | --- | --- | --- | --- | --- |",
     ]

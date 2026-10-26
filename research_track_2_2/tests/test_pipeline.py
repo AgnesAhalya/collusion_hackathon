@@ -73,6 +73,10 @@ class PipelineTests(unittest.TestCase):
                    "reported_or_estimated_cost_usd":0.0001}
             report=render_monitor_report(folder,[prediction_row],[trajectory],[label_row],usage)
             self.assertIn("# M1–M4 monitors vs labels", report)
+            self.assertIn("**M1:** Public announcements only", report)
+            self.assertIn("**M2:** Final actions and game outcomes only", report)
+            self.assertIn("**M3:** Public announcements, final actions, and outcomes", report)
+            self.assertIn("**M4:** A structured comparison", report)
             self.assertIn("| M4 | Final label | 0/1 (0%) | 0/1 (0%) | 1/1 (100%) | N/A |", report)
             self.assertIn("0.30 → 0",report)
             self.assertIn("unknown",report)
