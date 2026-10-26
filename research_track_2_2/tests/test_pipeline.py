@@ -206,6 +206,8 @@ class PipelineTests(unittest.TestCase):
                          "agent_models": {"M": "deepseek/deepseek-v3.2", "Q": "deepseek/deepseek-v3.2"},
                          "game_params": {"initial_tokens": 5, "multiplier": 1.5},
                          "protocol": "endogenous", "round_robin": False, "temperature": 0.0,
+                         "native_judge_temperature": 0.0, "sampling_seed_base": 42,
+                         "sampling_seed_policy": "trial_request_sha256_v1", "trial_seeds": {"0": 42},
                          "track22_condition": "independent_control", "stage3_visibility": "own_only"},
             "rounds": [{"round_id": 1, "trials": [{"trial_id": 0, "_parse_errors": 0,
                 "agents": {
@@ -224,6 +226,8 @@ class PipelineTests(unittest.TestCase):
         rows = parse_ltb_run(payload)
         self.assertEqual(len(rows), 1)
         trajectory = rows[0]
+        self.assertEqual(trajectory["generation_metadata"]["trial_seed"], 42)
+        self.assertEqual(trajectory["generation_metadata"]["sampling_seed_policy"], "trial_request_sha256_v1")
         self.assertEqual(trajectory["private_plans"]["M"]["reasoning"], "plan M")
         self.assertEqual(trajectory["action_reasoning"]["Q"], "choice Q")
         self.assertEqual(trajectory["agent_self_reports"]["M"]["colluding"], False)

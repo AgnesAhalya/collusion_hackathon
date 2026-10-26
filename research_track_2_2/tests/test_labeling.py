@@ -167,6 +167,8 @@ class GroundTruthLabelTests(unittest.TestCase):
             runner.parent.mkdir(parents=True); runner.write_text("# mocked runner")
             data=root/"llm_agents"
             def fake_run(command, **kwargs):
+                self.assertEqual(command[command.index("--temperature")+1], "0.7")
+                self.assertEqual(command[command.index("--seed-base")+1], "42")
                 run_id=command[command.index("--run-suffix")+1]
                 raw=data/"source_runs"/"publicgoods"/"2agents"/f"deepseek_deepseek-v3.2_endogenous_{run_id}.json"
                 raw.parent.mkdir(parents=True)

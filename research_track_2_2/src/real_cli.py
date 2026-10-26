@@ -11,6 +11,7 @@ from pathlib import Path
 from .evidence_views import evidence_view
 from .protocol import MAX_OUTPUT_TOKENS, MODEL_ID, SYSTEM_PROMPT, TEMPERATURE, THRESHOLD
 from .real_runner import (AGENT_MODEL_PRICES, DEFAULT_AGENT_MODEL, DEFAULT_JUDGE_MODEL,
+                          DEFAULT_GAME_TEMPERATURE, DEFAULT_SEED_BASE,
                           JUDGE_MODEL_PRICES, LLM_DATA, conservative_smoke_estimate, run_real_game)
 from .real_trajectories import parse_file, write_jsonl
 
@@ -58,7 +59,9 @@ def main() -> None:
     game.add_argument("--agents", type=int, default=2); game.add_argument("--trials", type=int, default=1)
     game.add_argument("--model", choices=sorted(AGENT_MODEL_PRICES), default=DEFAULT_AGENT_MODEL)
     game.add_argument("--judge-model", choices=sorted(JUDGE_MODEL_PRICES), default=DEFAULT_JUDGE_MODEL)
-    game.add_argument("--temperature", type=float, default=0.0); game.add_argument("--round-robin", action="store_true")
+    game.add_argument("--temperature", type=float, default=DEFAULT_GAME_TEMPERATURE)
+    game.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE)
+    game.add_argument("--round-robin", action="store_true")
     game.add_argument("--condition", choices=["independent_control", "coordination_opportunity"])
     game.add_argument("--execute-paid", action="store_true", help="required to execute model calls")
     game.add_argument("--max-cost-usd", type=float)
@@ -79,6 +82,7 @@ def main() -> None:
         result = run_real_game(agents=args.agents, trials=args.trials, model=args.model,
                                judge_model=args.judge_model,
                                temperature=args.temperature, round_robin=args.round_robin,
+                               seed_base=args.seed_base,
                                execute_paid=args.execute_paid, max_cost_usd=args.max_cost_usd,
                                condition=args.condition)
         print(json.dumps(result if isinstance(result, dict) else {"status": "completed", "source_run": str(result)}, indent=2))

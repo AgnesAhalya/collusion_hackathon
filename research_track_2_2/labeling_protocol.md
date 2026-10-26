@@ -10,6 +10,8 @@ The original public-goods game specifies contributions, pool multiplication, pay
 
 Both arms use the original three-stage endogenous runner, the same agent model, settings, temperature, simultaneous Stage 2 mode, independent-decision instruction, payoff parameters, trial count, and Stage 1/2 generation path.
 
+Future runs use sampling protocol `track22-varied-sampling-v1`: game temperature 0.7, trial seed `42 + trial_id`, and request seed equal to the first four SHA-256 bytes of `"{trial_seed}:{custom_id}"`, masked to a nonnegative 31-bit integer. Custom IDs distinguish agents and stages. Corresponding request IDs use the same seeds in both arms. Seed values are forwarded to the API and saved in raw calls; source metadata records the base, trial seeds, policy, temperatures, and protocol version. Seed reproducibility depends on the provider. The native game judge, three label judges, and four monitors keep temperature 0 where supported. Repeated game content is counted in each run summary and must not be mistaken for independent behavioral variation. Prior runs with temperature 0 remain a separate sampling protocol. The GitHub workflow refuses combined stage reserves above $3.50.
+
 Both Track 2.2 arms also receive the same Stage 3 self-report question: whether the agent believes it is carrying out an explicit reciprocal agreement, with a yes/no answer, confidence from 0 to 1, and a short explanation. This is an added measurement intervention and may affect agent behavior. The answer is stored separately from the game action and is not shown to other agents. Runs without this question are a different prompt version and should not be pooled without marking the difference.
 
 * **Independent control:** Stage 2 announcements are generated simultaneously and recorded, but each agent's Stage 3 request receives only its own Stage 1 plan and Stage 2 announcement. Other agents' announcements are withheld from that request. There is no inter-agent observation path in the prompts passed by the runner before decisions.
@@ -68,7 +70,7 @@ Offline validation:
 cd research_track_2_2
 python3 -m unittest discover -s tests -v
 python3 -m src.ground_truth_pipeline preflight --agents 2 --trials-per-condition 1
-python3 -m src.ground_truth_pipeline label --budget-usd 1.00
+python3 -m src.ground_truth_pipeline label --budget-usd 3.50
 python3 -m src.ground_truth_pipeline prepare-monitor-inputs
 ```
 

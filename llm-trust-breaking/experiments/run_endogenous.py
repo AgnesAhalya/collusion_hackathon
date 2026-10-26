@@ -119,6 +119,10 @@ def main():
         help="Sampling temperature (default: 1.0)"
     )
     parser.add_argument(
+        "--seed-base", type=int, default=42,
+        help="Track 2.2 trial seed base; each trial and request gets a derived seed"
+    )
+    parser.add_argument(
         "--output-dir", type=str, default="outputs/experiments",
         help="Output directory for results (default: outputs/experiments)"
     )
@@ -248,6 +252,10 @@ def main():
         temperature=args.temperature,
         max_workers=20,
     )
+    if args.track22_condition:
+        if not 0 <= args.seed_base <= 2147483647 - args.trials:
+            parser.error("seed base must be nonnegative and fit the trial seed range")
+        llm_client.trial_seed_base = args.seed_base
 
     # ------------------------------------------------------------------
     # Game parameters
@@ -386,6 +394,11 @@ def main():
         "agent_models": agent_models,
         "game_params": game_params,
         "temperature": args.temperature,
+        "native_judge_temperature": 0.0 if track22_condition else args.temperature,
+        "sampling_seed_base": args.seed_base if track22_condition else None,
+        "sampling_seed_policy": "trial_request_sha256_v1" if track22_condition else "fixed_42",
+        "trial_seeds": {str(t): args.seed_base + t for t in range(args.trials)} if track22_condition else None,
+        "sampling_protocol_version": "track22-varied-sampling-v1" if track22_condition else None,
         "round_robin": round_robin,
         "announcement_order_seed": 42,
         "generation_method": "llm_trust_breaking.run_endogenous",
@@ -403,7 +416,9 @@ def main():
         "track22_source_sha256": {
             relative: hashlib.sha256(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), relative), "rb").read()).hexdigest()
             for relative in ("experiments/run_endogenous.py", "src/endogenous/core/trial_runner.py",
-                             "src/endogenous/core/prompt_builders.py", "src/games/publicgoods.py")
+                             "src/endogenous/core/prompt_builders.py", "src/games/publicgoods.py",
+                             "src/llm/providers/parallel_openrouter_async.py",
+                             "src/llm/providers/queued_openrouter.py")
         } if track22_condition else None,
     })
 

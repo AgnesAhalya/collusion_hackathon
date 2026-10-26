@@ -21,6 +21,7 @@ Two execution modes:
 """
 
 from typing import Dict, Any, List, Optional
+import hashlib
 import json
 import re
 import time
@@ -55,6 +56,19 @@ def _model_supports_structured_output(model: str) -> bool:
     return supports_structured_output(model)
 
 
+def _request_seed(custom_id: str, llm_client: Any) -> int:
+    """Use distinct request seeds within each trial, matched across study arms."""
+    base = getattr(llm_client, "trial_seed_base", None)
+    if base is None or "_judge_" in custom_id:
+        return 42
+    trial = re.search(r"(?:^|_)t(\d+)_", custom_id)
+    if trial is None:
+        raise ValueError(f"trial seed policy requires a trial ID: {custom_id}")
+    trial_seed = base + int(trial.group(1))
+    digest = hashlib.sha256(f"{trial_seed}:{custom_id}".encode()).digest()
+    return int.from_bytes(digest[:4], "big") & 0x7fffffff
+
+
 def _build_request(
     custom_id: str,
     model: str,
@@ -83,7 +97,7 @@ def _build_request(
         request["reasoning_effort"] = settings.REASONING_EFFORT
     else:
         request["temperature"] = temperature
-        request["seed"] = 42
+        request["seed"] = _request_seed(custom_id, llm_client)
 
     # Only add structured output for models that support it
     # Must check the actual model being used, not llm_client.model
@@ -765,7 +779,7 @@ def _build_judge_request(
         system_prompt=sys_p,
         user_prompt=usr_p,
         json_schema=schema,
-        temperature=llm_client.temperature,
+        temperature=0.0 if getattr(llm_client, "trial_seed_base", None) is not None else llm_client.temperature,
         supports_structured=supports_structured,
         llm_client=llm_client,
     )

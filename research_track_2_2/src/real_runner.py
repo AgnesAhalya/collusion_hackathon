@@ -7,6 +7,7 @@ never reimplements stages, game actions, or payoff calculations.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -26,6 +27,8 @@ RUNNER = STARTER / "experiments" / "run_endogenous.py"
 LLM_DATA = ROOT / "data" / "llm_agents"
 RESULTS_DIR = ROOT / "results" / "llm_agents"
 MODEL_CONFIG_PATH = ROOT / "configs" / "game_models.json"
+DEFAULT_GAME_TEMPERATURE = 0.7
+DEFAULT_SEED_BASE = 42
 
 
 def load_game_model_config(path: Path = MODEL_CONFIG_PATH) -> dict[str, Any]:
@@ -164,6 +167,15 @@ def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_i
     raw_usage = summarize_raw_calls(folder / "raw_calls")
     shutil.copy2(raw_path, folder / "source_run.json")
     source_payload = json.loads(raw_path.read_text(encoding="utf-8"))
+    metadata = source_payload.get("metadata", {})
+    sampling = {key: metadata.get(key) for key in (
+        "temperature", "native_judge_temperature", "sampling_seed_base",
+        "sampling_seed_policy", "sampling_protocol_version", "trial_seeds")}
+    unique_content = {json.dumps({key: row.get(key) for key in (
+        "private_plans", "public_messages", "actions", "action_reasoning", "agent_self_reports")},
+        sort_keys=True, ensure_ascii=False) for row in trajectories}
+    diversity = {"trajectory_count": len(trajectories), "unique_game_content_count": len(unique_content),
+                 "repeated_game_content_count": len(trajectories) - len(unique_content)}
     source_trials = {
         (round_row.get("round_id"), trial.get("trial_id")): trial
         for round_row in source_payload.get("rounds", [])
@@ -180,6 +192,8 @@ def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_i
         f"- Agent model: `{agent_model}`",
         f"- Original game-judge model: `{judge_model}`",
         f"- Trajectories: {len(trajectories)}",
+        f"- Agent temperature: {sampling['temperature']}; trial seed base: {sampling['sampling_seed_base']}; seed policy: {sampling['sampling_seed_policy']}",
+        f"- Unique game records: {len(unique_content)}/{len(trajectories)}; repeated content: {diversity['repeated_game_content_count']}. Different seeds do not guarantee independent or different behavior.",
         f"- Estimated inference cost: ${estimate['estimated_cost_usd']:.4f} (estimate only)",
         f"- Expected logical requests: {estimate['game_requests']}; retry reserve: up to {estimate['max_http_attempts_including_retries']} HTTP attempts",
         f"- Actual HTTP attempts captured: {raw_usage['http_attempts_recorded']}",
@@ -193,6 +207,7 @@ def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_i
     summary = {
         "run_id": run_id, "condition": condition, "agent_model": agent_model,
         "game_judge_model": judge_model, "trajectory_count": len(trajectories),
+        "sampling_settings": sampling, "diversity": diversity,
         "expected_logical_requests": estimate["game_requests"],
         "reserved_max_http_attempts": estimate["max_http_attempts_including_retries"],
         "estimated_cost_usd": estimate["estimated_cost_usd"],
@@ -247,12 +262,20 @@ def write_readable_run_bundle(*, raw_path: Path, trajectories: list[dict], run_i
 
 def run_real_game(*, agents: int = 2, trials: int = 1, model: str = DEFAULT_AGENT_MODEL,
                   judge_model: str = DEFAULT_JUDGE_MODEL,
-                  temperature: float = 0.0, max_cost_usd: float | None = None,
+                  temperature: float = DEFAULT_GAME_TEMPERATURE, seed_base: int = DEFAULT_SEED_BASE,
+                  max_cost_usd: float | None = None,
                   execute_paid: bool = False, round_robin: bool = False,
                   condition: str | None = None) -> Path | dict[str, Any]:
+    if not math.isfinite(temperature) or not 0 <= temperature <= 2:
+        raise ValueError("temperature must be between 0 and 2")
+    if not 0 <= seed_base <= 2147483647 - trials:
+        raise ValueError("seed base must be nonnegative and fit the trial seed range")
     estimate = conservative_smoke_estimate(agents, trials, model, judge_model)
     if not execute_paid:
-        return {"status": "preflight_only", "condition": condition, **estimate}
+        return {"status": "preflight_only", "condition": condition,
+                "agent_temperature": temperature, "seed_base": seed_base,
+                "sampling_seed_policy": "trial_request_sha256_v1" if condition else "fixed_42",
+                **estimate}
     if condition not in (None, "independent_control", "coordination_opportunity"):
         raise ValueError("condition must be independent_control or coordination_opportunity")
     if condition and round_robin:
@@ -294,7 +317,8 @@ def run_real_game(*, agents: int = 2, trials: int = 1, model: str = DEFAULT_AGEN
     environment["TRACK22_RUN_ID"] = run_id
     command = [sys.executable, str(RUNNER), "--game", "publicgoods", "--agents", str(agents),
                "--trials", str(trials), "--rounds", "1", "--model", model, "--judge-model", judge_model,
-               "--temperature", str(temperature), "--output-dir", str(source_dir), "--run-suffix", run_id]
+               "--temperature", str(temperature), "--seed-base", str(seed_base),
+               "--output-dir", str(source_dir), "--run-suffix", run_id]
     if condition:
         command.extend(["--track22-condition", condition])
     if round_robin:

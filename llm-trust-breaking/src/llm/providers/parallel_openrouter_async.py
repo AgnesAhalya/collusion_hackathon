@@ -181,6 +181,8 @@ class AsyncOpenRouterParallelClient:
                     # Add optional parameters
                     if 'temperature' in request:
                         data['temperature'] = request['temperature']
+                    if 'seed' in request:
+                        data['seed'] = request['seed']
 
                     if 'max_tokens' in request:
                         data['max_tokens'] = request['max_tokens']
