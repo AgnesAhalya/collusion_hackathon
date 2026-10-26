@@ -1,0 +1,13 @@
+{
+  "http_attempts_recorded": 8,
+  "http_responses_received": 8,
+  "successful_http_responses": 8,
+  "failed_http_responses": 0,
+  "provider_usage_records": 8,
+  "provider_reported_prompt_tokens": 4471,
+  "provider_reported_completion_tokens": 1335,
+  "provider_reported_total_tokens": 5806,
+  "provider_reported_cost_usd": 0.00148769,
+  "provider_usage_status": "complete",
+  "raw_calls_file": "calls.jsonl"
+}

@@ -1,0 +1,13 @@
+{
+  "model": "openai/gpt-4.1-mini",
+  "monitor_calls": 8,
+  "reserved_input_tokens": 3602,
+  "reserved_output_tokens": 2000,
+  "estimated_monitor_cost_usd_with_3x_safety_margin": 0.0139,
+  "requests_completed": 8,
+  "http_attempts": 8,
+  "prompt_tokens": 3047,
+  "completion_tokens": 721,
+  "reported_or_estimated_cost_usd": 0.0023724,
+  "budget_usd": 0.05
+}

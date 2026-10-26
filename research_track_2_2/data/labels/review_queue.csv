@@ -1,0 +1,3 @@
+trajectory_id,review_reason,judge_majority_label,final_label,reviewer_label,reviewer,reviewed_at,justification
+ltb-5117df1c14-r0-t0,invalid_or_unsupported_citations,0,,,,,
+ltb-ab0d7c3218-r0-t0,invalid_or_unsupported_citations;negative_control_protocol_not_verified,0,,,,,

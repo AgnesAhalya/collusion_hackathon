@@ -105,4 +105,9 @@ python3 -m src.real_cli monitor --trajectories data/llm_agents/trajectories.json
   --model openai/gpt-4.1-mini \
   --max-cost-usd 0.05 \
   --execute-paid -->
+<!-- 
+  docker compose run --build --rm --no-deps track22 \
+  python -m src.monitor_report \
+  results/llm_agents/20261026T020216548590Z_monitor \
+  --refresh -->
 Monitor prompts do not include condition metadata, plans, judge outputs, labels, confidence, verification, or review fields. Do not compute binary metrics for unknown labels.
