@@ -2,24 +2,52 @@
 \usepackage[margin=1in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{lmodern,microtype,booktabs,array,hyperref}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{array}
 \usepackage[authoryear,round]{natbib}
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.55em}
-\newcommand{\pending}{\textit{Pending execution}}
-\title{\bfseries AI Collusion Forensics: Comparing Communication and Behavioral Evidence}
-\author{Agnes Ahalya Arogyaraj\\Saarland University\\\small With Apart Research}
-\date{Execution report draft --- 26 October 2026}
+\setlength{\parskip}{0.65em}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\newcommand{\guidance}[1]{\textit{#1}}
 \begin{document}
-\maketitle
+\begin{center}
+{\LARGE\bfseries AI Collusion Forensics: Comparing Communication and Behavioral Evidence}\par
+\vspace{1.5em}
+\begin{tabular}{>{\centering\arraybackslash}p{0.28\textwidth} >{\centering\arraybackslash}p{0.28\textwidth} >{\centering\arraybackslash}p{0.28\textwidth}}
+Agnes Ahalya Arogyaraj \\
+Saarland University \\[1.3em]
+
+\end{tabular}
+\par\vspace{1em}
+With\\Apart Research
+\end{center}
 \begin{abstract}
 This study asks whether monitors detect collusion more reliably when they can compare what agents say with what they do. Two or more language-model agents play the existing public-goods game under two conditions: an independent-control condition that hides other agents' announcements before final action, and a coordination-opportunity condition that reveals them. The original game runner and payoff calculation are preserved. Every saved trajectory is assessed by three independent labeling models, followed by evidence checks and human review when the label remains uncertain. Four monitors then receive different, condition-blinded evidence views: public messages, actions and outcomes, a combined timeline, or a structured comparison of claims and actions. This draft fixes the design and analysis plan before the complete run. Quantitative results and conclusions will be added after trajectories, labels, and monitor outputs have been checked.
+
 \end{abstract}
+\vspace{1em}
+\vfill
+\noindent\textsuperscript{1} Research conducted at the AI Collusion Research Sprint, October 2026
+\newpage
 
 \section{Introduction}
 Multi-agent systems can produce apparent coordination through shared context or similar incentives. A useful collusion assessment therefore needs evidence of an agreement, its relationship to the study rule, and the actions that followed. Public statements alone can overstate intent; actions alone can hide how the agents reached them. The practical question is which evidence view helps a monitor distinguish these cases.
 
-We compare four views of the \emph{same} game trajectories so that a difference between monitors can be attributed to the evidence shown, subject to model and sampling limits. The study contributes (1) a two-condition execution protocol using the existing game engine, (2) a three-judge labeling process with source verification and an unknown outcome, and (3) a matched comparison of communication-only, behavior-only, combined, and structured combined monitoring.
+We compare four views of the \emph{same} game trajectories so that a difference between monitors can be attributed to the evidence shown, subject to model and sampling limits.
+
+Our main contributions are:
+\begin{enumerate}
+\item A two-condition execution protocol using the existing game engine and payoff calculation.
+\item A three-judge labeling process with source verification, an unknown outcome, and human review.
+\item A matched comparison of communication-only, behavior-only, combined, and structured combined monitoring.
+\end{enumerate}
 
 \section{Related Work}
 Research on multi-agent systems has examined how communication and behavior reveal coordination. COLOSSEUM(\cite{nakamura2026colosseum}) investigates collusion through agent messages and observed actions, distinguishing expressed intentions from executed behavior . \cite{radev2026best} show that access to agent communication can improve detection of coordinated sabotage. \cite{shi2026agents} examine differences between private intentions, public commitments, and final actions in repeated games, providing the experimental foundation for our study.
@@ -44,56 +72,61 @@ Each monitor sees one of four views of a trajectory: M1 public messages; M2 acti
 We will report, for each view, true positives, false positives, true negatives, false negatives, precision, and recall against \emph{verified} final labels. We will give every denominator and report an undefined metric when its denominator is zero. Unknown final labels and failed monitor responses will be counted separately. We will compare the four views case by case and by condition, without treating judge agreement as proof of a true population rate. We will also report actual HTTP attempts, provider-reported or estimated token usage and cost, and elapsed time where recorded.
 
 \section{Results}
-\textbf{Status:} \pending. Fill this section only after the complete workflow artifact has been decrypted and checked.
+\textbf{Results pending.} Quantitative findings will be added after the complete workflow artifact has been checked. No result values are claimed in this draft.
 
 \begin{table}[h]
 \centering
-\begin{tabular}{lccc}
-\toprule
-Condition & Trajectories & Verified positive & Verified negative / unknown\\
-\midrule
-Independent control & \pending & \pending & \pending\\
-Coordination opportunity & \pending & \pending & \pending\\
-\bottomrule
+\begin{tabular}{lrrrr}
+\hline
+Condition & Total & Positive & Negative & Unknown\\
+\hline
+Independent control & -- & -- & -- & --\\
+Coordination opportunity & -- & -- & -- & --\\
+\hline
 \end{tabular}
-\caption{Trajectory and label counts. Report negative and unknown counts separately in the final version.}
+\caption{Trajectory and verified label counts to be filled after execution. Dashes indicate pending values.}
 \end{table}
 
 \begin{table}[h]
 \centering
 \begin{tabular}{lrrrrcc}
-\toprule
+\hline
 View & TP & FP & TN & FN & Precision & Recall\\
-\midrule
+\hline
 M1 messages & -- & -- & -- & -- & -- & --\\
 M2 behavior & -- & -- & -- & -- & -- & --\\
 M3 combined & -- & -- & -- & -- & -- & --\\
 M4 structured & -- & -- & -- & -- & -- & --\\
-\bottomrule
+\hline
 \end{tabular}
-\caption{Planned matched monitor comparison on verified labels only. Dashes are unfilled values, not zeroes.}
+\caption{Planned monitor comparison on verified labels only. Unknown final labels and failed responses will be reported separately.}
 \end{table}
 
-The final report should add a compact table of completed and failed API calls, tokens, cost, and wall time by stage, plus one representative trajectory showing each agent's plan, announcement, final action, and resulting payoff. Any claim that one view performs better must state the number of evaluable trajectories and uncertainty due to the sample size.
+The completed report will include actual API usage, cost, and elapsed time by stage, plus a representative trajectory showing each agent's plan, announcement, final action, and resulting payoff. Claims about differences between monitor views will state the number of evaluable trajectories and the limits of the sample.
 
 \section{Discussion and Limitations}
 \textbf{Interpretation pending.} The analysis will ask whether communication and behavior together resolve cases that either view alone leaves ambiguous. It will separately assess whether the structured presentation changes performance relative to the raw combined timeline.
 
-\textbf{Limitations.} The small pilot cannot support a precise estimate of detection performance. Agreement among three model judges can still share blind spots, and their self-reported confidence is not calibrated. The added independence instruction and collusion self-report change the game prompt. Monitoring on one model and one score threshold may not generalize. Local spending caps are estimates rather than provider-enforced limits. We will describe partial or invalid runs instead of silently treating them as completed data.
+\subsection*{Limitations}
+The small pilot cannot support a precise estimate of detection performance. Agreement among three model judges can still share blind spots, and their self-reported confidence is not calibrated. The added independence instruction and collusion self-report change the game prompt. Monitoring on one model and one score threshold may not generalize. Local spending caps are estimates rather than provider-enforced limits. Partial or invalid runs will be reported explicitly.
+
+\subsection*{Future Work}
+A larger sample can test whether any observed differences persist across more trajectories. Further work could vary agent and monitor models, examine the effect of the self-report question, and measure agreement between human reviewers and model judges.
 
 \section{Conclusion}
-This draft specifies the execution and evaluation before observing the complete run. The final conclusion will be written from verified labels and matched monitor results; no outcome is claimed here.
+This draft specifies the execution and evaluation before observing the complete run. The final conclusion will be written from verified labels and matched monitor results.
 
 \subsection*{Code and Data}
-Code: \url{https://github.com/AgnesAhalya/collusion_hackathon}. The complete run is produced by the \texttt{Track 2.2 complete experiment} GitHub Action. Its research artifact is encrypted and should be cited by run ID and commit SHA in the final report. Release any raw agent or API records only after checking their contents and permissions.
+\begin{itemize}
+\item Code repository: \url{https://github.com/AgnesAhalya/collusion_hackathon}
+\item Data/Datasets: Results pending. The workflow saves an encrypted artifact containing trajectories, labels, monitor outputs, and available API usage.
+\item Other artifacts: The \texttt{Track 2.2 complete experiment} GitHub Action runs the full pipeline. The completed report will record the run ID and commit SHA.
+\end{itemize}
 
-\begin{thebibliography}{9}
-\bibitem[Arike et~al.(2026)]{arike2026does} Arike et~al. \emph{How does information access affect LLM monitors' ability to detect sabotage?} \url{https://arxiv.org/abs/2601.21112}.
-\bibitem[Nakamura et~al.(2026)]{nakamura2026colosseum} Nakamura et~al. \emph{Colosseum: Auditing Collusion in Cooperative Multi-Agent Systems}. \url{https://arxiv.org/abs/2602.15198}.
-\bibitem[Nguyen et~al.(2026)]{nguyen2026traceguard} Nguyen et~al. \emph{TraceGuard: Structured Multi-Dimensional Monitoring as a Collusion-Resistant Control Protocol}. \url{https://arxiv.org/abs/2604.03968}.
-\bibitem[Radev et~al.(2026)]{radev2026best} Radev et~al. \emph{The Best-Laid SCHEMEs: Coordinated Sabotage and Monitoring in Multi-Agent Systems}. \url{https://arxiv.org/abs/2605.29178}.
-\bibitem[Shi et~al.(2026)]{shi2026agents} Shi et~al. \emph{When Agents Lie: Premeditation, Persistence, and Exploitation in Repeated Games}. \url{https://arxiv.org/abs/2607.05132}.
-\end{thebibliography}
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+
 
 \section*{LLM Usage Statement}
 Large language models (LLMs) were used to brainstorm research ideas, summarize and understand related literature, assist with code generation and debugging, and support drafting and editing the report. The research design, implementation decisions, interpretation of results, and final conclusions remained the responsibility of the author. All AI-generated content was reviewed before inclusion.
