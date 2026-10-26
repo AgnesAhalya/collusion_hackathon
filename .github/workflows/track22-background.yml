@@ -1,218 +1,196 @@
-name: Track 2.2 background experiment
+name: Track 2.2 complete experiment
 
 on:
   workflow_dispatch:
     inputs:
-      stage:
-        description: Paid stage to run (one stage per approval)
+      agents:
+        description: Agents in each game (pilot default 2)
         required: true
-        type: choice
-        options:
-          - independent_control
-          - coordination_opportunity
-          - labels
-          - monitors
-      source_run_id:
-        description: Previous stage's Actions run ID; leave empty for independent_control
-        required: false
-        type: string
-      agent_model:
-        description: Game agent model
+        default: 2
+        type: number
+      trials_per_condition:
+        description: Trajectories in each condition (pilot default 1)
         required: true
-        default: deepseek/deepseek-v3.2
-        type: string
-      game_judge_model:
-        description: Native game judge model
-        required: true
-        default: deepseek/deepseek-v3.2
-        type: string
+        default: 1
+        type: number
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: track22-paid-experiment
   cancel-in-progress: false
 
 jobs:
-  run-stage:
+  experiment:
     if: ${{ github.actor == github.repository_owner }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      STAGE: ${{ inputs.stage }}
-      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-      AGENT_MODEL: ${{ inputs.agent_model }}
-      GAME_JUDGE_MODEL: ${{ inputs.game_judge_model }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       TRACK22_ARTIFACT_PASSPHRASE: ${{ secrets.TRACK22_ARTIFACT_PASSPHRASE }}
+      AGENT_MODEL: deepseek/deepseek-v3.2
+      GAME_JUDGE_MODEL: deepseek/deepseek-v3.2
+      MONITOR_MODEL: openai/gpt-4.1-mini
+      AGENTS: ${{ inputs.agents }}
+      TRIALS_PER_CONDITION: ${{ inputs.trials_per_condition }}
     steps:
-      - name: Check out the experiment code
+      - name: Check out code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Validate manual approval and secrets
+      - name: Validate secrets and make an isolated fresh run directory
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "${OPENROUTER_API_KEY:-}" ]] || { echo '::error::Set the OPENROUTER_API_KEY repository secret.'; exit 1; }
+          [[ -n "${OPENROUTER_API_KEY:-}" ]] || { echo '::error::Set OPENROUTER_API_KEY as a repository secret.'; exit 1; }
           [[ ${#TRACK22_ARTIFACT_PASSPHRASE} -ge 24 ]] || { echo '::error::Set a 24+ character TRACK22_ARTIFACT_PASSPHRASE repository secret.'; exit 1; }
-          if [[ "$STAGE" == independent_control ]]; then
-            [[ -z "$SOURCE_RUN_ID" ]] || { echo '::error::The first stage must not have a source run ID.'; exit 1; }
-          else
-            [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]] || { echo '::error::Enter the previous stage Actions run ID.'; exit 1; }
-          fi
+          run_root="$RUNNER_TEMP/track22-fresh"
+          mkdir -p "$run_root/research_track_2_2"
+          rsync -a --exclude='/data' --exclude='/results' \
+            "$GITHUB_WORKSPACE/research_track_2_2/" "$run_root/research_track_2_2/"
+          ln -s "$GITHUB_WORKSPACE/llm-trust-breaking" "$run_root/llm-trust-breaking"
+          ln -s "$GITHUB_WORKSPACE/util" "$run_root/util"
+          mkdir -p "$run_root/research_track_2_2/data/llm_agents" \
+            "$run_root/research_track_2_2/data/labels" \
+            "$run_root/research_track_2_2/data/monitor_inputs" \
+            "$run_root/research_track_2_2/results"
+          echo "RUN_ROOT=$run_root" >> "$GITHUB_ENV"
           echo "LOCAL_UID=$(id -u)" >> "$GITHUB_ENV"
           echo "LOCAL_GID=$(id -g)" >> "$GITHUB_ENV"
-          mkdir -p research_track_2_2/data/labels research_track_2_2/data/monitor_inputs research_track_2_2/results
 
-      - name: Download previous encrypted results
-        if: ${{ inputs.stage != 'independent_control' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: track22-state
-          run-id: ${{ inputs.source_run_id }}
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/track22-input
-
-      - name: Restore previous results
-        if: ${{ inputs.stage != 'independent_control' }}
+      - name: Verify fixed models and full-run budget before paid calls
         shell: bash
-        run: |
-          set -euo pipefail
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
-            -in "$RUNNER_TEMP/track22-input/track22-state.tar.gz.enc" \
-            -out "$RUNNER_TEMP/track22-state.tar.gz" \
-            -pass env:TRACK22_ARTIFACT_PASSPHRASE
-          tar -xzf "$RUNNER_TEMP/track22-state.tar.gz" -C research_track_2_2 --no-same-owner
-          rm -f "$RUNNER_TEMP/track22-state.tar.gz"
-
-      - name: Verify stage order and saved trajectories
-        id: verify_state
-        shell: bash
+        working-directory: ${{ runner.temp }}/track22-fresh/research_track_2_2
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json
-          import os
+          import json, math, os
           from pathlib import Path
+          from src.ground_truth_pipeline import pilot_cost_estimate
+          from src.real_runner import conservative_smoke_estimate
+          from src.collusion_judges import load_config
 
-          root = Path('research_track_2_2')
-          stage = os.environ['STAGE']
-          marker = root / '.track22_workflow_state.json'
-          trajectories = root / 'data/llm_agents/trajectories.jsonl'
-          expected_previous = {
-              'coordination_opportunity': 'independent_control',
-              'labels': 'coordination_opportunity',
-              'monitors': 'labels',
-          }
-          if stage == 'independent_control':
-              assert not marker.exists() and not trajectories.exists(), 'first stage needs a fresh checkout'
-          else:
-              assert marker.is_file() and trajectories.is_file(), 'previous stage state is missing'
-              state = json.loads(marker.read_text())
-              assert state['stage'] == expected_previous[stage], 'use the run ID from the immediately preceding stage'
-              assert str(state['run_id']) == os.environ['SOURCE_RUN_ID'], 'source run ID does not match saved state'
-              rows = [json.loads(line) for line in trajectories.read_text().splitlines() if line.strip()]
-              conditions = [row.get('protocol_settings', {}).get('track22_condition') for row in rows]
-              expected = (['independent_control'] if stage == 'coordination_opportunity'
-                          else ['coordination_opportunity', 'independent_control'])
-              assert sorted(conditions) == sorted(expected), 'unexpected saved trajectory count or condition'
-              if stage == 'coordination_opportunity':
-                  assert state['agent_model'] == os.environ['AGENT_MODEL']
-                  assert state['game_judge_model'] == os.environ['GAME_JUDGE_MODEL']
-              if stage == 'labels':
-                  assert not (root / 'data/labels/verified_labels.jsonl').exists(), 'labels already exist'
-              if stage == 'monitors':
-                  assert (root / 'data/labels/verified_labels.jsonl').is_file(), 'verified label file is missing'
-                  assert not list((root / 'results').glob('llm_agents/*_monitor')), 'monitor results already exist'
-          print(f'Validated {stage} stage input without model calls.')
+          agent = os.environ['AGENT_MODEL']
+          judge = os.environ['GAME_JUDGE_MODEL']
+          agents = int(os.environ['AGENTS'])
+          trials = int(os.environ['TRIALS_PER_CONDITION'])
+          assert 2 <= agents <= 6, 'agents must be 2–6'
+          assert 1 <= trials <= 10, 'trials per condition must be 1–10'
+          assert agent == judge == 'deepseek/deepseek-v3.2'
+          assert os.environ['MONITOR_MODEL'] == 'openai/gpt-4.1-mini'
+          panel = load_config()['models']
+          assert [m['id'] for m in panel] == [
+              'openai/gpt-4.1-nano',
+              'mistralai/mistral-small-3.2-24b-instruct',
+              'deepseek/deepseek-v3.2',
+          ]
+          game = conservative_smoke_estimate(agents, trials, agent, judge)
+          full = pilot_cost_estimate(agents=agents, trials_per_condition=trials,
+                                     agent_model=agent, game_judge_model=judge)
+          def cap(value, factor):
+              return math.ceil(value * factor * 10000) / 10000
+          game_cap = cap(game['estimated_cost_usd'], 1.25)
+          label_cap = cap(full['cost_reserve_usd']['three_label_judges'], 1.25)
+          monitor_cap = cap(full['cost_reserve_usd']['four_monitors'], 3.3)
+          total_cap = 2 * game_cap + label_cap + monitor_cap
+          assert total_cap <= 1.00, 'calculated run cap exceeds $1.00; reduce agents or trials'
+          with Path(os.environ['GITHUB_ENV']).open('a') as out:
+              out.write(f'GAME_CAP_USD={game_cap}\nLABEL_CAP_USD={label_cap}\nMONITOR_CAP_USD={monitor_cap}\n')
+          print(json.dumps({'models': {'agents': agent, 'native_game_judge': judge,
+                    'label_judges': [m['id'] for m in panel],
+                    'monitors': os.environ['MONITOR_MODEL']},
+                    'design': {'agents_per_game': agents, 'trials_per_condition': trials,
+                               'total_trajectories': 2 * trials},
+                    'logical_requests': {'games': 2 * game['game_requests'],
+                    'labels': full['label_judge_calls'], 'monitors': full['monitor_calls']},
+                    'estimated_total_usd': full['cost_reserve_usd']['total'],
+                    'stage_caps_usd': {'each_game': game_cap, 'labels': label_cap,
+                    'monitors': monitor_cap, 'total': total_cap}}, indent=2))
           PY
 
       - name: Build experiment container
-        shell: bash
-        working-directory: research_track_2_2
+        working-directory: ${{ runner.temp }}/track22-fresh/research_track_2_2
         run: docker compose build track22
 
-      - name: Run the selected paid stage
+      - name: Run both conditions, labels, and all four monitors
+        id: run
         shell: bash
-        working-directory: research_track_2_2
+        working-directory: ${{ runner.temp }}/track22-fresh/research_track_2_2
         run: |
           set -euo pipefail
-          case "$STAGE" in
-            independent_control|coordination_opportunity)
-              docker compose run --rm --no-deps track22 \
-                python -m src.real_cli preflight --agents 2 --trials 1 \
-                --model "$AGENT_MODEL" --judge-model "$GAME_JUDGE_MODEL"
-              docker compose run --rm --no-deps track22 \
-                python -m src.real_cli run-game --agents 2 --trials 1 \
-                --condition "$STAGE" --model "$AGENT_MODEL" \
-                --judge-model "$GAME_JUDGE_MODEL" --temperature 0 \
-                --max-cost-usd 0.05 --execute-paid
-              ;;
-            labels)
-              docker compose run --rm --no-deps track22 \
-                python -m src.ground_truth_pipeline label --budget-usd 0.02
-              docker compose run --rm --no-deps track22 \
-                python -m src.ground_truth_pipeline label --budget-usd 0.02 --execute-paid
-              ;;
-            monitors)
-              docker compose run --rm --no-deps track22 \
-                python -m src.real_cli monitor --model openai/gpt-4.1-mini
-              docker compose run --rm --no-deps track22 \
-                python -m src.real_cli monitor --model openai/gpt-4.1-mini \
-                --max-cost-usd 0.05 --execute-paid
-              ;;
-          esac
-
-      - name: Mark completed stage
-        shell: bash
-        run: |
-          set -euo pipefail
+          for condition in independent_control coordination_opportunity; do
+            docker compose run --rm --no-deps track22 \
+              python -m src.real_cli run-game --agents "$AGENTS" --trials "$TRIALS_PER_CONDITION" \
+              --condition "$condition" --model "$AGENT_MODEL" \
+              --judge-model "$GAME_JUDGE_MODEL" --temperature 0 \
+              --max-cost-usd "$GAME_CAP_USD" --execute-paid
+          done
+          docker compose run --rm --no-deps track22 \
+            python -m src.ground_truth_pipeline label \
+            --budget-usd "$LABEL_CAP_USD" --execute-paid
+          docker compose run --rm --no-deps track22 \
+            python -m src.ground_truth_pipeline stats
+          docker compose run --rm --no-deps track22 \
+            python -m src.ground_truth_pipeline prepare-monitor-inputs
+          docker compose run --rm --no-deps track22 \
+            python -m src.real_cli monitor --model "$MONITOR_MODEL" \
+            --max-cost-usd "$MONITOR_CAP_USD" --execute-paid
           python3 - <<'PY'
           import json
-          import os
           from pathlib import Path
-          marker = Path('research_track_2_2/.track22_workflow_state.json')
-          marker.write_text(json.dumps({
-              'stage': os.environ['STAGE'],
-              'run_id': int(os.environ['GITHUB_RUN_ID']),
-              'source_run_id': os.environ['SOURCE_RUN_ID'],
-              'agent_model': os.environ['AGENT_MODEL'],
-              'game_judge_model': os.environ['GAME_JUDGE_MODEL'],
-              'code_revision': os.environ['GITHUB_SHA'],
-          }, indent=2) + '\n')
-          PY
-          echo "### Track 2.2: $STAGE completed" >> "$GITHUB_STEP_SUMMARY"
-          echo "For the next stage, enter source run ID **$GITHUB_RUN_ID**." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Encrypt saved results, including partial results on failure
+          root = Path('.')
+          def rows(path):
+              assert path.is_file(), f'missing required output: {path}'
+              return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+          trajectories = rows(root / 'data/llm_agents/trajectories.jsonl')
+          trials = int(__import__('os').environ['TRIALS_PER_CONDITION'])
+          assert len(trajectories) == 2 * trials, 'unexpected trajectory count'
+          conditions = [t.get('protocol_settings', {}).get('track22_condition') for t in trajectories]
+          assert conditions.count('independent_control') == trials
+          assert conditions.count('coordination_opportunity') == trials
+          ids = {t['trajectory_id'] for t in trajectories}
+          assert len(ids) == 2 * trials, 'trajectory IDs must be unique'
+          labels = rows(root / 'data/labels/verified_labels.jsonl')
+          assert len(labels) == 2 * trials and {r['trajectory_id'] for r in labels} == ids, 'missing label records'
+          runs = list((root / 'results/llm_agents').glob('*_monitor'))
+          assert len(runs) == 1, 'expected one monitor result folder'
+          predictions = rows(runs[0] / 'predictions.jsonl')
+          expected = {(tid, view) for tid in ids for view in ('M1', 'M2', 'M3', 'M4')}
+          assert {(r['trajectory_id'], r['condition']) for r in predictions} == expected
+          assert len(predictions) == 8 * trials and all(r['status'] == 'ok' for r in predictions), 'incomplete monitor results'
+          assert (runs[0] / 'monitor_vs_labels.md').is_file(), 'missing readable monitor report'
+          print(f'Validated {2*trials} trajectories, {2*trials} label records, {8*trials} monitor predictions, and report.')
+          PY
+          echo '### Full Track 2.2 run completed' >> "$GITHUB_STEP_SUMMARY"
+          echo "$((2 * TRIALS_PER_CONDITION)) trajectories, three label judges per trajectory, and M1–M4 monitoring were attempted. Inspect the encrypted artifact for unknown labels." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Encrypt full or partial results
         id: encrypt
-        if: ${{ always() && steps.verify_state.outcome == 'success' }}
+        if: ${{ always() && env.RUN_ROOT != '' }}
         shell: bash
         run: |
           set -euo pipefail
+          root="$RUN_ROOT/research_track_2_2"
           [[ -n "${TRACK22_ARTIFACT_PASSPHRASE:-}" ]] || exit 0
-          root=research_track_2_2
           [[ -f "$root/data/llm_agents/trajectories.jsonl" || -d "$root/results/llm_agents" ]] || exit 0
-          paths=(data results)
-          [[ ! -f "$root/.track22_workflow_state.json" ]] || paths+=(.track22_workflow_state.json)
-          tar -czf "$RUNNER_TEMP/track22-state.tar.gz" -C "$root" "${paths[@]}"
+          tar -czf "$RUNNER_TEMP/track22-results.tar.gz" -C "$root" data results
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
-            -in "$RUNNER_TEMP/track22-state.tar.gz" \
-            -out "$RUNNER_TEMP/track22-state.tar.gz.enc" \
+            -in "$RUNNER_TEMP/track22-results.tar.gz" \
+            -out "$RUNNER_TEMP/track22-results.tar.gz.enc" \
             -pass env:TRACK22_ARTIFACT_PASSPHRASE
-          rm -f "$RUNNER_TEMP/track22-state.tar.gz"
+          rm -f "$RUNNER_TEMP/track22-results.tar.gz"
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
-      - name: Save encrypted research artifact
+      - name: Save encrypted results
         if: ${{ always() && steps.encrypt.outputs.ready == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: track22-state
-          path: ${{ runner.temp }}/track22-state.tar.gz.enc
+          name: track22-results
+          path: ${{ runner.temp }}/track22-results.tar.gz.enc
           if-no-files-found: error
           retention-days: 30
           compression-level: 0

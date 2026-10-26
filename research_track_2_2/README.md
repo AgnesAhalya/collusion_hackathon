@@ -1,5 +1,11 @@
 # Track 2.2: evidence views over public-goods trajectories
 
+## One-click GitHub Actions run
+
+Run **Track 2.2 complete experiment** from the repository's Actions tab, using **Run workflow**. The only inputs are **agents** and **trials per condition**. Pilot defaults are 2 agents and 1 trial per condition, producing 2 trajectories total. For example, 2 agents and 3 trials per condition produce 6 trajectories. Every run then labels all trajectories with three independent judges and scores all four monitor views. The workflow uses a fresh temporary data directory, so checked-in research results are not read, deleted, or overwritten.
+
+Set repository secrets `OPENROUTER_API_KEY` and `TRACK22_ARTIFACT_PASSPHRASE` (at least 24 characters) first. The model choices are fixed in the workflow: DeepSeek V3.2 for agents and the original game judge; GPT-4.1 Nano, Mistral Small 3.2, and DeepSeek V3.2 for labeling; GPT-4.1 Mini for M1–M4. The workflow prints a request and cost preflight, calculates stage caps automatically, and refuses any selection whose combined caps exceed $1.00. The pilot default plans 30 logical requests (16 game, 6 label, 8 monitor) with a $0.1253 conservative estimate; provider charges can differ. The encrypted `track22-results` artifact contains full or partial output even if a later stage fails. Keep the passphrase: it is required to decrypt the artifact.
+
 The research path uses genuine trajectories from `llm-trust-breaking`'s endogenous public-goods runner. The prior pilot game runs, labels, and monitor outputs were cleared on 2026-10-26 at the study owner's request; no pilot data is currently retained. See [FLOW_AUDIT.md](FLOW_AUDIT.md) for the checked flow. Track 2.2 runs ask agents for a Stage 3 yes/no collusion self-report with confidence. Judges may see it as evidence; monitor views exclude it. The live prompt text is in [prompts/](prompts/README.md), with separate files for each game stage, judge, and monitor prompt.
 
 ## Offline reproduction
