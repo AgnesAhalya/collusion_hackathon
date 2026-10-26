@@ -1,6 +1,6 @@
 # Labeling pipeline validation report
 
-Status: all pilot game runs and derived results were removed on 2026-10-26 at the user's request. See `FLOW_AUDIT.md` for the current code audit. No model API calls were made during the audit or cleanup.
+Status: prior pilot game runs, labels, and monitor outputs were cleared on 2026-10-26 at the study owner's request. The numeric-uncertainty parser fix remains in place. See `FLOW_AUDIT.md` for the current audit. No model API calls were made during cleanup.
 
 ## Implemented
 
@@ -11,9 +11,9 @@ Status: all pilot game runs and derived results were removed on 2026-10-26 at th
 
 ## Offline tests
 
-The current host suite passes **38 tests** with one raw-call-capture test skipped because `aiohttp` is not installed on the host. The rebuilt Docker suite passes **38 tests**. Tests cover DeepSeek-specific pricing, game-judge model selection, starter filename recovery, raw usage aggregation, label acceptance and review, all three study game prompts, parser, monitoring, caching, and evaluation checks. No model API requests were made by tests.
+The current host suite passes **39 tests** with one raw-call-capture test skipped because `aiohttp` is not installed on the host. The rebuilt Docker suite passes **39 tests**. Tests cover DeepSeek-specific pricing, game-judge model selection, starter filename recovery, raw usage aggregation, label acceptance and review, all three study game prompts, parser, monitoring, caching, and evaluation checks. No model API requests were made by tests.
 
-The final rebuilt Docker suite passed all **38 tests**, including the raw API-call capture test. The service uses a non-root UID/GID, read-only root filesystem, dropped capabilities, no-new-privileges, CPU/memory/PID limits, tmpfs `/tmp`, and read-only source/starter mounts. Tests mock model responses and made no model API requests.
+The final rebuilt Docker suite passed all **39 tests**, including the raw API-call capture test. The service uses a non-root UID/GID, read-only root filesystem, dropped capabilities, no-new-privileges, CPU/memory/PID limits, tmpfs `/tmp`, and read-only source/starter mounts. Tests mock model responses and made no model API requests.
 
 The test cases use in-memory trajectories and mocked responses; they include unanimous and 2/3 votes, unknown ties, low confidence, nonexistent quotes, proposed-but-unexecuted agreements, same-action independent controls, missing actions, malformed JSON, explicit contradiction, human override provenance, private-plan isolation, monitor label leakage, cache hits, raw-usage aggregation, and a paid-call guard. The integration test calls the starter's real `build_stage3_prompt` and checks peer-message visibility in each arm. No static benchmark datasets are retained.
 
@@ -25,7 +25,7 @@ The 20–40 trajectory goal is cost-feasible at the same conservative assumption
 
 ## Remaining limits
 
-1. No trajectories or labels are currently retained. A fresh run under the corrected parser and prompts is needed for current-protocol labeling. New runs capture raw API usage, and the Stage 3 self-report is a behavioral intervention applied equally in both conditions.
+1. No pilot trajectories, labels, human review queue, or monitor outputs are retained. New runs capture raw API usage, and the Stage 3 self-report is a behavioral intervention applied equally in both conditions.
 2. Judges do not receive the arm identifier. This protects against direct label leakage, but means they cannot use control assignment to label negatives. The deterministic verifier uses hidden run metadata only after judgments. Some true independent-control cases may therefore remain unknown.
 3. Natural-language agreement and whether it violated the study instruction cannot be fully proven by deterministic code. Exact quotes, participant IDs, parse flags, and action execution can be machine-checked; reviewers must assess the semantics.
 4. The original game has an internal GPT-5 Mini judge call per agent. That is additional to the three stage calls and is included in the cost estimate; its labels are not used as study labels.
@@ -40,8 +40,8 @@ Current rates checked 2026-10-25 against OpenRouter listings: GPT-4.1 Nano $0.10
 
 ## Updated execution plan
 
-1. Offline implementation and regression suite: host suite 37 passed, 1 skipped because `aiohttp` is Docker-only.
-2. Docker regression suite: 38 tests passed.
-3. Current-protocol pilot artifacts: pending. Generate new runs under the corrected parser and prompt files before current-protocol labeling or monitoring.
-4. Main run and label panel: pending fresh pilot review and separate trial-count/spend approval. The judges may see self-reports but must validate claims against recorded messages/actions.
-5. Monitoring: pending separate call approval. Monitors must remain blind to self-reports, labels, plans, and condition metadata.
+1. Offline implementation and regression suite: host suite 38 passed, 1 skipped because `aiohttp` is Docker-only.
+2. Docker regression suite: 39 tests passed.
+3. Current-protocol pilot artifacts: cleared at the study owner's request; no saved run remains.
+4. Main run and label panel: pending new operator-run data and separate trial-count/spend approval. The judges may see self-reports but must validate claims against recorded messages/actions.
+5. Monitoring: no saved pilot output remains. Monitors remain blind to self-reports, labels, plans, and condition metadata.

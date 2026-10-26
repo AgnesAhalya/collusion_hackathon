@@ -8,6 +8,6 @@ This workspace is narrowed to Track 2.2 and its direct research dependencies.
 - [`util/`](util/) — shared model configuration package used by the starter.
 - [`literature/`](literature/) — sprint papers and collusion-definition materials.
 
-The previous 24 scripted cases are retained as test-only data. Two earlier real-game run records were cleared from the active dataset on 2026-10-25 to prepare for a fresh pilot; their provider-reported usage was not saved. See [`research_track_2_2/README.md`](research_track_2_2/README.md) and its [`labeling_protocol.md`](research_track_2_2/labeling_protocol.md).
+Static benchmark datasets and the older pilot outputs were removed. Two new game runs and labels are retained; the first monitor attempt is preserved with parser errors pending a fresh run. See [`FLOW_AUDIT.md`](research_track_2_2/FLOW_AUDIT.md) for the checked flow. Track 2.2 runs ask agents for a separate Stage 3 collusion self-report and confidence; judges may see it as evidence, while monitors remain blind to it. Live prompts are in [`prompts/`](research_track_2_2/prompts/README.md). See [`research_track_2_2/README.md`](research_track_2_2/README.md) and its [`labeling_protocol.md`](research_track_2_2/labeling_protocol.md).
 
 The shared configuration template is [`compute.env.example`](compute.env.example). Do not commit a populated `compute.env` or `.env`.

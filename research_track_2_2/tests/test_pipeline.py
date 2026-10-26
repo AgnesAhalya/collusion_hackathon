@@ -11,7 +11,8 @@ from urllib.error import URLError
 
 from src.evidence_views import evidence_view
 from src.evaluate import metrics, prediction, save_results
-from src.openrouter_client import OpenRouterClient
+from src.openrouter_client import OpenRouterClient, parse_monitor_response
+from src.monitor_report import prediction_outcome, render_monitor_report, write_monitor_report
 from src.ground_truth_pipeline import blinded_case, monitor_payloads
 from src.real_cli import prepare_views
 from src.real_runner import conservative_smoke_estimate, summarize_raw_calls
@@ -42,6 +43,62 @@ def real_trajectory():
 
 
 class PipelineTests(unittest.TestCase):
+    def test_numeric_monitor_uncertainty_and_markdown_comparison(self):
+        raw={"choices":[{"message":{"content":json.dumps({"collusion_score":0.3,
+             "evidence_summary":"No executed agreement.","uncertainty":0.2})}}]}
+        self.assertEqual(parse_monitor_response(raw)["uncertainty"],0.2)
+        invalid={"choices":[{"message":{"content":json.dumps({"collusion_score":0.3,
+             "evidence_summary":"No executed agreement.","uncertainty":True})}}]}
+        with self.assertRaisesRegex(ValueError,"uncertainty"):
+            parse_monitor_response(invalid)
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def read(self): return json.dumps({**raw,"usage":{"prompt_tokens":10,"completion_tokens":10,"cost":0.0001}}).encode()
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory)
+            client=OpenRouterClient("openai/gpt-4.1-mini",folder/"cache.json",api_key="mock",retries=0)
+            with patch("src.openrouter_client.urllib.request.urlopen",return_value=Response()) as network:
+                parsed=client.complete("mock evidence")
+                self.assertEqual(network.call_count,1)
+            self.assertEqual(parsed["uncertainty"],0.2)
+            trajectory=real_trajectory()
+            prediction_row={"trajectory_id":trajectory["trajectory_id"],
+                "condition":"M1","status":"ok","score":0.3,"prediction":0,
+                "evidence_summary":parsed["evidence_summary"],"uncertainty":parsed["uncertainty"]}
+            label_row={"trajectory_id":trajectory["trajectory_id"],
+                               "judge_majority_label":0,"final_label":None,
+                               "judgments":[{"model":"judge-a","label":0,"confidence":0.9}]}
+            usage={"http_attempts":1,"prompt_tokens":10,"completion_tokens":10,
+                   "reported_or_estimated_cost_usd":0.0001}
+            report=render_monitor_report(folder,[prediction_row],[trajectory],[label_row],usage)
+            self.assertIn("0.30 → 0",report)
+            self.assertIn("unknown",report)
+            self.assertIn("Judge votes | Judge majority | Final label | Vs judges* | Vs final",report)
+            self.assertIn("| 0.30 → 0 | 0 | 0 | unknown | success (TN) | undetermined |",report)
+            self.assertIn("| Judge majority* | 1/1 (100%) | 0/1 (0%) | 0/1 (0%) | N/A |",report)
+            self.assertIn("| Final label | 0/1 (0%) | 0/1 (0%) | 1/1 (100%) | N/A |",report)
+            positive={**prediction_row,"score":0.8,"prediction":1}
+            positive_label={**label_row,"judge_majority_label":1,"final_label":1,
+                            "judgments":[{**label_row["judgments"][0],"label":1}]}
+            positive_report=render_monitor_report(folder,[positive],[trajectory],[positive_label],usage)
+            self.assertIn("| Judge majority* | 1/1 (100%) | 0/1 (0%) | 0/1 (0%) | 100% |",positive_report)
+            self.assertIn("| Final label | 1/1 (100%) | 0/1 (0%) | 0/1 (0%) | 100% |",positive_report)
+            self.assertEqual(prediction_outcome(1,1),"TP")
+            self.assertEqual(prediction_outcome(1,0),"FP")
+            self.assertEqual(prediction_outcome(0,0),"TN")
+            self.assertEqual(prediction_outcome(0,1),"FN")
+            self.assertEqual(prediction_outcome(0,None),"unscored")
+            (folder/"predictions.jsonl").write_text(json.dumps(prediction_row)+"\n")
+            (folder/"usage.json").write_text(json.dumps(usage))
+            unrelated={**trajectory,"trajectory_id":"later-game"}
+            path=write_monitor_report(folder,[trajectory,unrelated],[label_row])
+            self.assertEqual(path.read_text(),report)
+            with self.assertRaises(FileExistsError):
+                write_monitor_report(folder,[trajectory],[label_row])
+            path.write_text("stale report")
+            self.assertEqual(write_monitor_report(folder,[trajectory,unrelated],[label_row],refresh=True).read_text(),report)
+
     def test_deepseek_pilot_preflight_uses_configured_rates(self):
         estimate = conservative_smoke_estimate(2, 1, "deepseek/deepseek-v3.2", "deepseek/deepseek-v3.2")
         self.assertEqual(estimate["game_requests"], 8)

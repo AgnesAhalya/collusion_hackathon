@@ -4,7 +4,10 @@ from typing import List, Dict, Any
 import asyncio
 import aiohttp
 import json
+import os
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from src.llm.capabilities import is_reasoning_model, supports_structured_output
 
 
@@ -35,6 +38,45 @@ class AsyncOpenRouterParallelClient:
         self.max_concurrent = max_concurrent
         self.timeout = timeout
         self.max_retries = max_retries
+
+    @staticmethod
+    def _capture_raw_call(*, request: Dict[str, Any], attempt: int,
+                          request_payload: Dict[str, Any], response_status: int | None = None,
+                          response_payload: Any = None, response_text: str | None = None,
+                          error: str | None = None) -> None:
+        """Append one credential-free HTTP attempt record when Track 2.2 enables capture."""
+        raw_dir = os.getenv("TRACK22_RAW_CALLS_DIR")
+        if not raw_dir:
+            return
+        directory = Path(raw_dir)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            os.chmod(directory, 0o700)
+        except OSError:
+            pass
+        record = {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "run_id": os.getenv("TRACK22_RUN_ID"),
+            "custom_id": request.get("custom_id"),
+            "attempt": attempt,
+            "model_requested": request.get("model"),
+            "request": request_payload,
+            "http_status": response_status,
+            "response": response_payload,
+            "response_raw_text": response_text if response_payload is None else None,
+            "usage": response_payload.get("usage") if isinstance(response_payload, dict) else None,
+            "error": error,
+        }
+        path = directory / "calls.jsonl"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            with os.fdopen(fd, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+        finally:
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
 
     def execute_parallel(self, requests_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -119,6 +161,7 @@ class AsyncOpenRouterParallelClient:
 
         # Retry with exponential backoff
         for attempt in range(self.max_retries):
+            data = {}
             async with semaphore:  # Limit concurrent requests
                 try:
                     # Build request data
@@ -131,6 +174,9 @@ class AsyncOpenRouterParallelClient:
                         "model": request['model'],
                         "messages": request['messages']
                     }
+                    if "openrouter.ai" in self.base_url:
+                        # OpenRouter returns provider-reported token and cost details in each response.
+                        data["usage"] = {"include": True}
 
                     # Add optional parameters
                     if 'temperature' in request:
@@ -156,8 +202,19 @@ class AsyncOpenRouterParallelClient:
                     )
                     async with session.post(self.base_url, headers=headers, json=data,
                                             timeout=req_timeout) as response:
+                        response_text = await response.text()
+                        try:
+                            response_data = json.loads(response_text)
+                        except (json.JSONDecodeError, ValueError):
+                            response_data = None
+                        self._capture_raw_call(
+                            request=request, attempt=attempt + 1, request_payload=data,
+                            response_status=response.status, response_payload=response_data,
+                            response_text=response_text,
+                        )
                         response.raise_for_status()
-                        response_data = await response.json()
+                        if response_data is None:
+                            raise ValueError("Provider returned a non-JSON response")
 
                         content = response_data["choices"][0]["message"]["content"]
 
@@ -192,6 +249,8 @@ class AsyncOpenRouterParallelClient:
                         }
 
                 except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+                    self._capture_raw_call(request=request, attempt=attempt + 1,
+                                           request_payload=data, error=str(e))
                     # Retryable errors
                     if attempt < self.max_retries - 1:
                         wait_time = (2 ** attempt) + (time.time() % 1)
@@ -206,6 +265,9 @@ class AsyncOpenRouterParallelClient:
                         }
 
                 except Exception as e:
+                    if not isinstance(e, ValueError):
+                        self._capture_raw_call(request=request, attempt=attempt + 1,
+                                               request_payload=data, error=str(e))
                     # Non-retryable errors
                     print(f"Error in request {custom_id}: {e}")
                     return custom_id, {

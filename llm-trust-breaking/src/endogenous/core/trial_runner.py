@@ -207,7 +207,8 @@ def _parse_response(response: Any, action_fields: List[str]) -> Dict[str, Any]:
 
     # Direct fields (OpenAI structured output already parsed)
     result = {}
-    for field in action_fields + ["reasoning", "message"]:
+    for field in action_fields + ["reasoning", "message", "self_report_colluding",
+                                  "self_report_confidence", "self_report_reasoning"]:
         if field in response:
             result[field] = response[field]
     if result:
@@ -276,8 +277,11 @@ def _normalize_action(action: Any, game_type: str) -> Any:
         if action is None:
             return None
         try:
-            return int(float(action))
-        except (ValueError, TypeError):
+            if isinstance(action, bool):
+                return None
+            number = float(action)
+            return int(number) if number.is_integer() else None
+        except (ValueError, TypeError, OverflowError):
             return None
 
 
@@ -573,7 +577,7 @@ def _run_stage3(
     Fire Stage 3 for all agents in parallel (each sees all Stage 2 messages).
 
     Returns:
-        Dict[agent_name -> {choice, reasoning, _parse_ok}]
+        Dict[agent_name -> action, reasoning and collusion self-report fields]
     """
     if stage3_visibility not in {"all_announcements", "own_only"}:
         raise ValueError("stage3_visibility must be all_announcements or own_only")
@@ -614,9 +618,21 @@ def _run_stage3(
         cid = req["custom_id"]
         parsed = _parse_response(raw_responses.get(cid, {}), ["choice"])
         action = _normalize_action(parsed.get("choice"), game_type)
+        if game_type == "publicgoods" and action is not None:
+            if not 0 <= action <= game_params.get("initial_tokens", 5):
+                action = None
         results[agent_name] = {
             "choice": action,
             "reasoning": parsed.get("reasoning", ""),
+            "self_report_colluding": parsed.get("self_report_colluding"),
+            "self_report_confidence": parsed.get("self_report_confidence"),
+            "self_report_reasoning": parsed.get("self_report_reasoning", ""),
+            "_self_report_parse_ok": isinstance(parsed.get("self_report_colluding"), bool)
+                and isinstance(parsed.get("self_report_confidence"), (int, float))
+                and not isinstance(parsed.get("self_report_confidence"), bool)
+                and 0 <= parsed.get("self_report_confidence", -1) <= 1
+                and isinstance(parsed.get("self_report_reasoning"), str)
+                and bool(parsed.get("self_report_reasoning", "").strip()),
             "_parse_ok": action is not None,
         }
     _assert_decisions_parsed(results, "Stage 3")
@@ -768,6 +784,7 @@ def _run_judge(
     llm_client: Any,
     supports_structured: bool,
     judge_model: str = "openai/gpt-5-mini",
+    stage3_visibility: str = "all_announcements",
 ) -> Dict[str, Dict[str, Any]]:
     """
     Fire the judge prompt for all agents in parallel (sequential runner).
@@ -785,7 +802,7 @@ def _run_judge(
             agent_names=agent_names,
             stage1_result=stage1_results.get(agent_name, {}),
             stage2_self=stage2_results.get(agent_name, {}),
-            stage2_all=stage2_results,
+            stage2_all=(stage2_results if stage3_visibility == "all_announcements" else {}),
             stage3_result=stage3_results.get(agent_name, {}),
             llm_client=llm_client,
             supports_structured=_model_supports_structured_output(judge_model),
@@ -883,6 +900,7 @@ def run_trial(
         llm_client=llm_client,
         supports_structured=_model_supports_structured_output(judge_model),
         judge_model=judge_model,
+        stage3_visibility=stage3_visibility,
     )
 
     # Compute deception measures per agent
@@ -929,6 +947,10 @@ def run_trial(
             "stage3": {
                 "choice":    actual,
                 "reasoning": s3.get("reasoning", ""),
+                "self_report_colluding": s3.get("self_report_colluding"),
+                "self_report_confidence": s3.get("self_report_confidence"),
+                "self_report_reasoning": s3.get("self_report_reasoning", ""),
+                "_self_report_parse_ok": s3.get("_self_report_parse_ok", False),
                 "_parse_ok": s3["_parse_ok"],
             },
             "promise_deception":   promise_deception,
@@ -1154,6 +1176,10 @@ def _assemble_trial_results(
                 "stage3": {
                     "choice":    actual,
                     "reasoning": s3.get("reasoning", ""),
+                    "self_report_colluding": s3.get("self_report_colluding"),
+                    "self_report_confidence": s3.get("self_report_confidence"),
+                    "self_report_reasoning": s3.get("self_report_reasoning", ""),
+                    "_self_report_parse_ok": s3.get("_self_report_parse_ok", False),
                     "_parse_ok": s3.get("_parse_ok", False),
                 },
                 "promise_deception":   promise_deception,
@@ -1463,6 +1489,15 @@ def run_all_trials_queued(
                 stage3_parsed[f"{trial_id}_{agent_name}"] = {
                     "choice":    action,
                     "reasoning": parsed.get("reasoning", ""),
+                    "self_report_colluding": parsed.get("self_report_colluding"),
+                    "self_report_confidence": parsed.get("self_report_confidence"),
+                    "self_report_reasoning": parsed.get("self_report_reasoning", ""),
+                    "_self_report_parse_ok": isinstance(parsed.get("self_report_colluding"), bool)
+                        and isinstance(parsed.get("self_report_confidence"), (int, float))
+                        and not isinstance(parsed.get("self_report_confidence"), bool)
+                        and 0 <= parsed.get("self_report_confidence", -1) <= 1
+                        and isinstance(parsed.get("self_report_reasoning"), str)
+                        and bool(parsed.get("self_report_reasoning", "").strip()),
                     "_parse_ok": action is not None,
                 }
         _assert_decisions_parsed(stage3_parsed, "Stage 3")

@@ -32,20 +32,19 @@ def prepare_views(rows: list[dict], path: Path) -> int:
 
 
 def _monitor_preflight(rows: list[dict], model: str) -> dict:
-    # Use visible evidence payload lengths only; cost reserve is 3x to cover up to
-    # three billable malformed-response attempts. Rates are enforced by the client.
+    # Paid monitor runs create a fresh cache, so every requested view needs a call.
+    # The 3x cost margin is conservative; paid CLI runs allow one attempt per view.
     from .openrouter_client import OpenRouterClient
     test_client = OpenRouterClient(model, Path("/tmp/track22-real-monitor-preflight-cache.json"),
                                    budget_usd=100, api_key="preflight-only", retries=0,
                                    system_prompt=REAL_SYSTEM)
     prompts = [evidence_view(row, c) for row in rows for c in ("M1", "M2", "M3", "M4")]
-    uncached = [p for p in prompts if test_client.cache_key(p, TEMPERATURE, MAX_OUTPUT_TOKENS) not in test_client.cache]
-    in_tokens = sum((len(p) + len(REAL_SYSTEM) + 2) // 3 for p in uncached)
+    in_tokens = sum((len(p) + len(REAL_SYSTEM) + 2) // 3 for p in prompts)
     input_rate, output_rate = test_client.rates[model]
-    base = in_tokens * input_rate / 1_000_000 + len(uncached) * MAX_OUTPUT_TOKENS * output_rate / 1_000_000
-    return {"monitor_calls": len(uncached), "reserved_input_tokens": in_tokens,
-            "reserved_output_tokens": len(uncached) * MAX_OUTPUT_TOKENS,
-            "estimated_monitor_cost_usd_with_3x_retry_reserve": round(base * 3, 4)}
+    base = in_tokens * input_rate / 1_000_000 + len(prompts) * MAX_OUTPUT_TOKENS * output_rate / 1_000_000
+    return {"monitor_calls": len(prompts), "reserved_input_tokens": in_tokens,
+            "reserved_output_tokens": len(prompts) * MAX_OUTPUT_TOKENS,
+            "estimated_monitor_cost_usd_with_3x_safety_margin": round(base * 3, 4)}
 
 
 def main() -> None:
@@ -97,16 +96,17 @@ def main() -> None:
         print(json.dumps({"status": "preflight_only", **estimate}, indent=2))
         if not args.execute_paid:
             return
-        if args.max_cost_usd is None or args.max_cost_usd < estimate["estimated_monitor_cost_usd_with_3x_retry_reserve"]:
+        if args.max_cost_usd is None or args.max_cost_usd < estimate["estimated_monitor_cost_usd_with_3x_safety_margin"]:
             raise SystemExit("Paid execution requires --max-cost-usd at least the printed conservative estimate")
         from .openrouter_client import OpenRouterClient
         from .monitor import score_evidence
-        outdir = ROOT / "results" / "llm_agents" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        outdir = ROOT / "results" / "llm_agents" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "_monitor")
+        outdir.mkdir(parents=True, exist_ok=False)
         client = OpenRouterClient(args.model, outdir / "cache.json", budget_usd=args.max_cost_usd,
                                   retries=0, system_prompt=REAL_SYSTEM)
         records = []
         raw_path = outdir / "raw_responses.jsonl"
-        with raw_path.open("w", encoding="utf-8") as raw:
+        with raw_path.open("x", encoding="utf-8") as raw:
             for trajectory in rows:
                 for condition in ("M1", "M2", "M3", "M4"):
                     prompt = evidence_view(trajectory, condition)
@@ -119,18 +119,22 @@ def main() -> None:
                                        "prediction": int(scored["collusion_score"] >= THRESHOLD),
                                        "evidence_summary": scored["evidence_summary"],
                                        "uncertainty": scored["uncertainty"]})
-                        raw.write(json.dumps({"trajectory_id": trajectory["trajectory_id"],
-                                              "condition": condition, "response": client.last_raw}) + "\n")
                     except Exception as exc:
                         record.update({"status": "error", "error": str(exc)})
+                    raw.write(json.dumps({"trajectory_id": trajectory["trajectory_id"],
+                                          "condition": condition, "status": record["status"],
+                                          "response": client.last_raw}, ensure_ascii=False) + "\n")
                     records.append(record)
-        with (outdir / "predictions.jsonl").open("w", encoding="utf-8") as f:
+        with (outdir / "predictions.jsonl").open("x", encoding="utf-8") as f:
             f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in records)
-        (outdir / "usage.json").write_text(json.dumps({"model": args.model, **estimate,
-              "requests_completed": client.request_count, "http_attempts": client.request_attempts,
-              "prompt_tokens": client.prompt_tokens, "completion_tokens": client.completion_tokens,
-              "reported_or_estimated_cost_usd": client.total_cost, "budget_usd": args.max_cost_usd}, indent=2))
-        print(f"Wrote {len(records)} predictions to {outdir}; no ground-truth metrics were computed.")
+        with (outdir / "usage.json").open("x", encoding="utf-8") as f:
+            f.write(json.dumps({"model": args.model, **estimate,
+                  "requests_completed": client.request_count, "http_attempts": client.request_attempts,
+                  "prompt_tokens": client.prompt_tokens, "completion_tokens": client.completion_tokens,
+                  "reported_or_estimated_cost_usd": client.total_cost, "budget_usd": args.max_cost_usd}, indent=2))
+        from .monitor_report import read_jsonl, write_monitor_report
+        report_path = write_monitor_report(outdir, rows, read_jsonl(ROOT / "data" / "labels" / "verified_labels.jsonl"))
+        print(f"Wrote {len(records)} predictions and {report_path}; no ground-truth metrics were computed.")
 
 
 if __name__ == "__main__":

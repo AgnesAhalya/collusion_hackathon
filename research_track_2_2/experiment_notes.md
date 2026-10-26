@@ -9,8 +9,8 @@
 - Added candidate-only label screening and a separate human annotation protocol. No verified collusion ground truth is available.
 - M4 adapts TraceGuard's action/trace-consistency idea; no original TraceGuard evaluator is invoked.
 - Removed the prior static benchmark and legacy `data/raw` datasets. Functional tests now use small in-memory inputs and mocked provider responses.
-- Latest host tests: 35 passed, 1 skipped because the host lacks `aiohttp`; Docker tests: all 35 passed under the non-root user with outbound networking disabled. Self-report capture, judge visibility, and monitor blindness are covered. Neither suite made API requests.
-- Label-judge requests were previously made; their pilot outputs and caches have been removed. No monitor requests were made. The next dataset must be generated afresh; Stage 3 now asks both conditions for a separate yes/no collusion self-report and confidence. Judges may see that report, while monitors are explicitly blind to it.
+- Offline tests cover self-report capture, judge visibility, and monitor blindness; they use mocked responses and make no model API requests.
+- Label-judge and monitor requests were made during the prior pilot; their outputs and caches have been removed. The next dataset must be generated afresh; Stage 3 asks both conditions for a separate yes/no collusion self-report and confidence. Judges may see that report, while monitors are explicitly blind to it.
 
 ## Pilot estimate (checked 2026-10-25)
 

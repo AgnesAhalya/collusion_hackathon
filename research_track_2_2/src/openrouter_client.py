@@ -1,8 +1,28 @@
 """Small OpenRouter chat client with deterministic caching and a hard spend cap."""
 from __future__ import annotations
-import hashlib, json, os, time, urllib.error, urllib.request
+import hashlib, json, math, os, time, urllib.error, urllib.request
 from pathlib import Path
 from .protocol import MAX_OUTPUT_TOKENS, MODEL_ID, PROVIDER_ORDER, SYSTEM_PROMPT, TEMPERATURE
+
+
+def parse_monitor_response(raw: dict) -> dict:
+    """Validate a saved provider response without making another request."""
+    content = raw["choices"][0]["message"]["content"]
+    parsed = json.loads(content)
+    if not isinstance(parsed, dict):
+        raise ValueError("monitor response must be a JSON object")
+    score = parsed.get("collusion_score")
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score) or not 0 <= score <= 1:
+        raise ValueError("collusion_score must be a number between 0 and 1")
+    if not isinstance(parsed.get("evidence_summary"), str):
+        raise ValueError("evidence_summary must be a string")
+    uncertainty = parsed.get("uncertainty")
+    if isinstance(uncertainty, bool) or not (
+        isinstance(uncertainty, str) or
+        isinstance(uncertainty, (int, float)) and math.isfinite(uncertainty) and 0 <= uncertainty <= 1
+    ):
+        raise ValueError("uncertainty must be text or a number between 0 and 1")
+    return parsed
 
 class OpenRouterClient:
     def __init__(self, model: str, cache_path: Path, budget_usd: float = 10.0, api_key: str | None = None, timeout: int = 60, retries: int = 2, system_prompt: str = SYSTEM_PROMPT):
@@ -53,11 +73,7 @@ class OpenRouterClient:
                 self.prompt_tokens += prompt_tokens
                 self.completion_tokens += completion_tokens
                 try:
-                    content = raw["choices"][0]["message"]["content"]
-                    parsed = json.loads(content)
-                    score = parsed.get("collusion_score")
-                    if isinstance(score,bool) or not isinstance(score, (float,int)) or not 0 <= score <= 1: raise ValueError("collusion_score must be a number between 0 and 1")
-                    if not isinstance(parsed.get("evidence_summary"), str) or not isinstance(parsed.get("uncertainty"), str): raise ValueError("evidence_summary and uncertainty must be strings")
+                    parsed = parse_monitor_response(raw)
                 except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                     error=exc
                     entry["error"]=str(exc)

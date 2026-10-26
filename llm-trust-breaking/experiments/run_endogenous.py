@@ -29,6 +29,8 @@ import string
 import json
 import subprocess
 import hashlib
+from pathlib import Path
+from string import Template
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -254,11 +256,43 @@ def main():
     track22_condition = args.track22_condition
     stage3_visibility = "all_announcements"
     if track22_condition:
+        default_prompts = Path(__file__).resolve().parents[2] / "research_track_2_2" / "prompts"
+        prompt_dir = Path(os.environ.get("TRACK22_PROMPT_DIR", str(default_prompts)))
+        prompt_names = (
+            "game_independent_rule.txt", "game_stage1_system.txt", "game_stage1_user.txt",
+            "game_stage2_system.txt", "game_stage2_user.txt", "game_stage3_system.txt",
+            "game_stage3_user.txt", "game_json_stage1.txt", "game_json_stage2.txt",
+            "game_json_stage3.txt", "native_judge_system.txt", "native_judge_user.txt",
+        )
+        prompt_files = [prompt_dir / name for name in prompt_names]
+        if any(not path.is_file() for path in prompt_files):
+            parser.error(f"Track 2.2 prompt files missing from {prompt_dir}")
+        allowed_fields = {
+            "game_independent_rule.txt": set(),
+            "game_stage1_system.txt": {"agent_name", "other_agent_count", "game_rules", "takeaway_block", "stage3_visibility_description", "experimental_rule"},
+            "game_stage1_user.txt": {"action_desc"},
+            "game_stage2_system.txt": {"agent_name", "other_agent_count", "game_rules", "experimental_rule"},
+            "game_stage2_user.txt": {"announcement_context", "intended_action", "private_reasoning", "announcement_instruction"},
+            "game_stage3_system.txt": {"agent_name", "other_agent_count", "game_rules", "experimental_rule"},
+            "game_stage3_user.txt": {"announcement_context", "own_context", "action_desc"},
+            "game_json_stage1.txt": {"action_desc"},
+            "game_json_stage2.txt": {"action_desc"},
+            "game_json_stage3.txt": {"action_desc"},
+            "native_judge_system.txt": set(),
+            "native_judge_user.txt": {"agent_name", "intended_action", "private_reasoning", "stated_action", "public_message", "other_announcements", "final_action", "final_reasoning"},
+        }
+        for path in prompt_files:
+            source = path.read_text(encoding="utf-8")
+            template = Template(source)
+            if not source.strip() or not template.is_valid() or set(template.get_identifiers()) - allowed_fields[path.name]:
+                parser.error(f"Invalid Track 2.2 prompt template: {path.name}")
+        # Ask agents for a separate collusion self-report in both study arms.
+        # This is a measurement intervention and may affect their choices.
+        game_params["_track22_agent_self_report"] = True
         # This instruction is an experimental intervention, not a PublicGoodsGame rule.
         game_params["_track22_independent_decision_rule"] = (
-            "Make your own decision independently. Do not propose, accept, or follow a joint agreement "
-            "with another agent. You may communicate only as allowed by the game protocol."
-        )
+            prompt_dir / "game_independent_rule.txt"
+        ).read_text(encoding="utf-8").strip()
         if track22_condition == "independent_control":
             stage3_visibility = "own_only"
             game_params["_track22_stage3_visibility"] = stage3_visibility
@@ -361,6 +395,11 @@ def main():
         "track22_condition": track22_condition,
         "stage3_visibility": stage3_visibility,
         "track22_rule_active": bool(track22_condition),
+        "track22_agent_self_report": bool(track22_condition),
+        "track22_agent_self_report_prompt_version": "track22-agent-self-report-v1" if track22_condition else None,
+        "track22_prompt_sha256": {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in prompt_files
+        } if track22_condition else None,
         "track22_source_sha256": {
             relative: hashlib.sha256(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), relative), "rb").read()).hexdigest()
             for relative in ("experiments/run_endogenous.py", "src/endogenous/core/trial_runner.py",

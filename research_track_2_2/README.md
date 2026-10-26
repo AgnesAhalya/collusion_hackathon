@@ -1,6 +1,6 @@
 # Track 2.2: evidence views over public-goods trajectories
 
-The research path uses genuine trajectories from `llm-trust-breaking`'s endogenous public-goods runner. No pilot run data or labels are currently retained. See [FLOW_AUDIT.md](FLOW_AUDIT.md) for the checked flow. New Track 2.2 runs ask agents for a Stage 3 yes/no collusion self-report with confidence. Judges may see it as evidence; monitor views exclude it. The live prompt text is in [prompts/](prompts/README.md), with separate files for each game stage, judge, and monitor prompt.
+The research path uses genuine trajectories from `llm-trust-breaking`'s endogenous public-goods runner. The prior pilot game runs, labels, and monitor outputs were cleared on 2026-10-26 at the study owner's request; no pilot data is currently retained. See [FLOW_AUDIT.md](FLOW_AUDIT.md) for the checked flow. Track 2.2 runs ask agents for a Stage 3 yes/no collusion self-report with confidence. Judges may see it as evidence; monitor views exclude it. The live prompt text is in [prompts/](prompts/README.md), with separate files for each game stage, judge, and monitor prompt.
 
 ## Offline reproduction
 
@@ -31,7 +31,9 @@ python -m src.real_cli parse-run data/llm_agents/source_runs/publicgoods/2agents
 python -m src.real_cli prepare-views
 ```
 
-The legacy `prepare-views` command materializes four evidence rows per trajectory. For new labeled runs, use the exclusive-create `src.ground_truth_pipeline prepare-monitor-inputs`, which writes `data/monitor_inputs/views.jsonl` and refuses to overwrite an existing file. To get a monitor cost preflight, run `python -m src.real_cli monitor`; it does not send requests. Paid monitor execution additionally requires `--execute-paid --max-cost-usd <approved-limit>`. Results go to a timestamped `results/llm_agents/` subdirectory and include prompt hashes, raw responses, predictions, token usage, and reported/estimated spend. Monitor outputs do not include automatic ground-truth metrics.
+The legacy `prepare-views` command materializes four evidence rows per trajectory. For new labeled runs, use the exclusive-create `src.ground_truth_pipeline prepare-monitor-inputs`, which writes `data/monitor_inputs/views.jsonl` and refuses to overwrite an existing file. To get a monitor cost preflight, run `python -m src.real_cli monitor`; it does not send requests. Paid monitor execution additionally requires `--execute-paid --max-cost-usd <approved-limit>`. Results go to a timestamped `results/llm_agents/<timestamp>_monitor/` subdirectory and include prompt hashes, raw responses, predictions, token usage, reported/estimated spend, and `monitor_vs_labels.md` comparing M1 with judge votes and final labels. The report counts success, failure, and undetermined outcomes; unknown final labels are excluded from precision.
+
+To refresh only the Markdown comparison from saved predictions and labels (no API calls), run `python -m src.monitor_report results/llm_agents/<timestamp>_monitor --refresh`. This replaces only `monitor_vs_labels.md`.
 
 ## Labels and interpretation
 
@@ -82,6 +84,10 @@ python3 -m src.ground_truth_pipeline label --budget-usd 0.02 --execute-paid
 ```
 
 <!-- docker compose run --rm --no-deps track22 \ python -m src.ground_truth_pipeline stats -->
+<!-- docker ps --filter label=com.docker.compose.service=track22 \
+  --format "table {{.Status}}\t{{.Names}}" -->
+<!-- docker compose run --rm --no-deps track22 \
+  python -m src.ground_truth_pipeline label --budget-usd 0.02 --execute-paid -->
 
 
 This stores individual raw judge responses and separate candidate/verified labels under `data/labels/`; disputed cases and a seeded sample of unanimous cases enter `review_queue.csv`. The three judges are GPT-4.1 Nano, Mistral Small 3.2, and DeepSeek V3.2. They are separate from the GPT-4.1 Mini monitoring model. Human decisions require a reviewer and written justification, and are logged without replacing judge outputs.
@@ -93,4 +99,10 @@ python3 -m src.ground_truth_pipeline prepare-monitor-inputs
 python3 -m src.real_cli monitor --trajectories data/llm_agents/trajectories.jsonl --model openai/gpt-4.1-mini --max-cost-usd 0.05 --execute-paid
 ```
 
+<!-- docker compose run --rm --build --no-deps track22 \
+  python -m src.real_cli monitor \
+  --trajectories data/llm_agents/trajectories.jsonl \
+  --model openai/gpt-4.1-mini \
+  --max-cost-usd 0.05 \
+  --execute-paid -->
 Monitor prompts do not include condition metadata, plans, judge outputs, labels, confidence, verification, or review fields. Do not compute binary metrics for unknown labels.

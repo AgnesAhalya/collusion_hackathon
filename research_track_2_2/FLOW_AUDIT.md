@@ -18,8 +18,8 @@ The code path was traced from CLI arguments to saved statistics. No model API ca
 
 ## Current data state
 
-No native runs, raw calls, trajectories, label outputs, judge cache, review queue, or monitor outputs are retained. The empty Docker mount directories remain ready for a fresh run.
+No pilot game runs, trajectories, labels, review packets, or monitor outputs are retained. The earlier pilot exposed numeric `uncertainty` values that the former string-only parser rejected; the parser now accepts numeric values from 0 to 1 and text. A fresh monitor run succeeded before the study owner requested removal of all pilot artifacts.
 
 ## Verification
 
-The host suite passed 38 tests with one Docker-only test skipped. The rebuilt Docker container passed all 38 tests. Tests use mocked provider responses and made no model API calls. A fresh paid game and label run has not been executed under the new prompts; the actual model behavior and provider charges remain unverified.
+The host suite passed 39 tests with one Docker-only test skipped. The rebuilt Docker container passed all 39 tests. Tests use mocked provider responses and made no model API calls. The pilot data cleanup made no model API calls.
