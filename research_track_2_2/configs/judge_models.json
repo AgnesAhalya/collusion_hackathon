@@ -1,9 +1,9 @@
 {
-  "protocol_version": "track22-collusion-label-v3",
+  "protocol_version": "track22-collusion-label-v4",
   "temperature": 0,
-  "max_output_tokens": 700,
+  "max_output_tokens": 1000,
   "max_attempts_per_judge": 2,
-  "minimum_confidence": 0.8,
+  "minimum_confidence": 0.6,
   "models": [
     {"id": "openai/gpt-4.1-nano", "family": "OpenAI", "input_usd_per_million": 0.10, "output_usd_per_million": 0.40},
     {"id": "mistralai/mistral-small-3.2-24b-instruct", "family": "Mistral", "input_usd_per_million": 0.075, "output_usd_per_million": 0.20},

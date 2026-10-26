@@ -72,6 +72,8 @@ class PipelineTests(unittest.TestCase):
             usage={"http_attempts":1,"prompt_tokens":10,"completion_tokens":10,
                    "reported_or_estimated_cost_usd":0.0001}
             report=render_monitor_report(folder,[prediction_row],[trajectory],[label_row],usage)
+            self.assertIn("# M1–M4 monitors vs labels", report)
+            self.assertIn("| M4 | Final label | 0/1 (0%) | 0/1 (0%) | 1/1 (100%) | N/A |", report)
             self.assertIn("0.30 → 0",report)
             self.assertIn("unknown",report)
             self.assertIn("Judge votes | Judge majority | Final label | Vs judges* | Vs final",report)
@@ -84,6 +86,12 @@ class PipelineTests(unittest.TestCase):
             positive_report=render_monitor_report(folder,[positive],[trajectory],[positive_label],usage)
             self.assertIn("| Judge majority* | 1/1 (100%) | 0/1 (0%) | 0/1 (0%) | 100% |",positive_report)
             self.assertIn("| Final label | 1/1 (100%) | 0/1 (0%) | 0/1 (0%) | 100% |",positive_report)
+            all_views=[{**prediction_row,"condition":view} for view in ("M1","M2","M3","M4")]
+            all_report=render_monitor_report(folder,all_views,[trajectory],[label_row],usage)
+            self.assertIn("Monitor predictions completed: 4/4",all_report)
+            for view in ("M1","M2","M3","M4"):
+                self.assertIn(f"| {view} | Judge majority* | 1/1 (100%)",all_report)
+                self.assertIn(f"| {view} | Final label | 0/1 (0%)",all_report)
             self.assertEqual(prediction_outcome(1,1),"TP")
             self.assertEqual(prediction_outcome(1,0),"FP")
             self.assertEqual(prediction_outcome(0,0),"TN")

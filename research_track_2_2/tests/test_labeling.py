@@ -74,8 +74,13 @@ class GroundTruthLabelTests(unittest.TestCase):
         t=trajectory(); r=aggregate_judgments([judgment(t,None),judgment(t,None),judgment(t,1)])
         self.assertIsNone(r["judge_majority_label"])
     def test_07_confidence_below_threshold(self):
-        t=trajectory(); r=deterministic_label_record(t,[judgment(t,1,.6),judgment(t,1,.7),judgment(t,1,.99)])
+        t=trajectory(); r=deterministic_label_record(t,[judgment(t,1,.59),judgment(t,1,.59),judgment(t,1,.99)])
         self.assertEqual(r["judge_majority_label"],1); self.assertIsNone(r["final_label"]); self.assertTrue(r["review_required"])
+    def test_confidence_exactly_at_new_threshold(self):
+        t=trajectory(); r=deterministic_label_record(t,[judgment(t,1,.60) for _ in range(3)])
+        self.assertEqual(r["median_agreeing_confidence"],.60)
+        self.assertEqual(r["final_label"],1)
+        self.assertEqual(r["label_provenance"]["minimum_confidence"],.60)
     def test_08_nonexistent_event_citation(self):
         t=trajectory(); r=deterministic_label_record(t,[judgment(t,1,.99,bad_event=True) for _ in range(3)])
         self.assertEqual(r["verification_status"],"failed"); self.assertIsNone(r["final_label"])

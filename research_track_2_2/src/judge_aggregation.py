@@ -2,7 +2,7 @@
 from __future__ import annotations
 from statistics import median
 
-def aggregate_judgments(judgments: list[dict], *, minimum_confidence: float = 0.80,
+def aggregate_judgments(judgments: list[dict], *, minimum_confidence: float = 0.60,
                         verification: dict | None = None) -> dict:
     if len(judgments) != 3:
         raise ValueError("exactly three independent judge records are required")

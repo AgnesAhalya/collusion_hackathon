@@ -44,7 +44,7 @@ def blinded_case(trajectory: dict) -> dict:
         raise AssertionError("judge packet contains a protected metadata token")
     return result
 
-def deterministic_label_record(trajectory: dict, judgments: list[dict], *, minimum_confidence: float = 0.80) -> dict:
+def deterministic_label_record(trajectory: dict, judgments: list[dict], *, minimum_confidence: float = 0.60) -> dict:
     candidate = aggregate_judgments(judgments, minimum_confidence=minimum_confidence)
     verification = verify_candidate(trajectory, judgments, candidate["judge_majority_label"])
     aggregate = aggregate_judgments(judgments, minimum_confidence=minimum_confidence, verification=verification)
@@ -58,6 +58,8 @@ def deterministic_label_record(trajectory: dict, judgments: list[dict], *, minim
     return {"trajectory_id": trajectory["trajectory_id"], **aggregate,
         "verification": verification, "judgments": judgments, "review_reason": ";".join(dict.fromkeys(reasons)),
         "label_provenance": {"prompt_version": PROMPT_VERSION, "prompt_sha256": prompt_sha256(),
+            "label_policy_version": load_config()["protocol_version"],
+            "minimum_confidence": minimum_confidence,
             "labeling_method": "three independent OpenRouter judges; deterministic source verification; human review when required"}}
 
 def monitor_payloads(trajectory: dict) -> list[dict]:
